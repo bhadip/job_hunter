@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Job Hunt</title>
+  <title>Job Hunter</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <header>
-    <h1>Job Hunt <span id="version" class="version"></span></h1>
+    <h1>Job Hunter <span id="version" class="version"></span></h1>
     <div class="user-box">
       <span id="user-email"></span>
       <span id="auth-mode" class="badge"></span>
@@ -26,86 +26,98 @@
   <main>
     <!-- ============ NEW RUN ============ -->
     <section id="tab-run" class="tab-panel active">
-      <div class="card">
-        <h2>Search Parameters</h2>
-        <label>Keywords (one per line)
-          <textarea id="f-keywords" rows="6"></textarea>
-        </label>
-        <div class="grid-2">
-          <label>Location <input id="f-location" type="text" /></label>
-          <label>Offsets (comma separated) <input id="f-offsets" type="text" value="0" /></label>
-          <label>Jobs per keyword <input id="f-limit" type="number" value="50" min="1" max="100" /></label>
-          <label>Distance (miles, optional) <input id="f-distance" type="number" min="0" /></label>
+      <div class="split">
+        <div class="pane pane-left">
+          <div class="card">
+            <h2>Search Parameters</h2>
+            <label>Keywords (one per line)
+              <textarea id="f-keywords" rows="6"></textarea>
+            </label>
+            <div class="grid-2">
+              <label>Location <input id="f-location" type="text" /></label>
+              <label>Offsets (comma separated) <input id="f-offsets" type="text" value="0" /></label>
+              <label>Jobs per keyword <input id="f-limit" type="number" value="50" min="1" max="100" /></label>
+              <label>Distance (miles, optional) <input id="f-distance" type="number" min="0" /></label>
+            </div>
+
+            <h3>Filters</h3>
+            <div class="grid-2">
+              <fieldset>
+                <legend>Employment type</legend>
+                <label><input type="checkbox" class="f-emp" value="Full-time" /> Full-time</label>
+                <label><input type="checkbox" class="f-emp" value="Contract" /> Contract</label>
+                <label><input type="checkbox" class="f-emp" value="Part-time" /> Part-time</label>
+                <label><input type="checkbox" class="f-emp" value="Temporary" /> Temporary</label>
+              </fieldset>
+              <fieldset>
+                <legend>Experience level</legend>
+                <label><input type="checkbox" class="f-exp" value="Executive" /> Executive</label>
+                <label><input type="checkbox" class="f-exp" value="Director" /> Director</label>
+                <label><input type="checkbox" class="f-exp" value="Mid-Senior level" /> Mid-Senior level</label>
+                <label><input type="checkbox" class="f-exp" value="Associate" /> Associate</label>
+                <label><input type="checkbox" class="f-exp" value="Entry level" /> Entry level</label>
+              </fieldset>
+            </div>
+            <label><input id="f-easy-apply" type="checkbox" /> Easy Apply only</label>
+            <label><input id="f-under10" type="checkbox" /> Under 10 applicants only</label>
+
+            <h3>LLM &amp; Output</h3>
+            <div class="grid-2">
+              <label>Score threshold (%) <input id="f-threshold" type="number" value="65" min="0" max="100" /></label>
+              <fieldset>
+                <legend>Document formats</legend>
+                <label><input type="checkbox" class="f-format" value="docx" /> docx</label>
+                <label><input type="checkbox" class="f-format" value="pdf" /> pdf</label>
+                <label><input type="checkbox" class="f-format" value="md" /> md</label>
+              </fieldset>
+            </div>
+            <label><input id="f-dry-run" type="checkbox" /> Dry run (scrape + score only; no sheet writes, no files)</label>
+
+            <div class="actions">
+              <button id="btn-run" class="primary">Run</button>
+              <button id="btn-save-defaults">Save as my defaults</button>
+            </div>
+            <div id="run-error" class="error"></div>
+          </div>
         </div>
 
-        <h3>Filters</h3>
-        <div class="grid-2">
-          <fieldset>
-            <legend>Employment type</legend>
-            <label><input type="checkbox" class="f-emp" value="Full-time" /> Full-time</label>
-            <label><input type="checkbox" class="f-emp" value="Contract" /> Contract</label>
-            <label><input type="checkbox" class="f-emp" value="Part-time" /> Part-time</label>
-            <label><input type="checkbox" class="f-emp" value="Temporary" /> Temporary</label>
-          </fieldset>
-          <fieldset>
-            <legend>Experience level</legend>
-            <label><input type="checkbox" class="f-exp" value="Executive" /> Executive</label>
-            <label><input type="checkbox" class="f-exp" value="Director" /> Director</label>
-            <label><input type="checkbox" class="f-exp" value="Mid-Senior level" /> Mid-Senior level</label>
-            <label><input type="checkbox" class="f-exp" value="Associate" /> Associate</label>
-            <label><input type="checkbox" class="f-exp" value="Entry level" /> Entry level</label>
-          </fieldset>
+        <div class="pane pane-right">
+          <div class="card" id="run-live">
+            <h2>Run <span id="live-run-id"></span> <span id="live-stage" class="badge"></span></h2>
+            <div class="actions">
+              <button id="btn-cancel" class="danger" style="display:none">Cancel run</button>
+            </div>
+            <pre id="live-log" class="log"></pre>
+          </div>
         </div>
-        <label><input id="f-easy-apply" type="checkbox" /> Easy Apply only</label>
-        <label><input id="f-under10" type="checkbox" /> Under 10 applicants only</label>
-
-        <h3>LLM &amp; Output</h3>
-        <div class="grid-2">
-          <label>Score threshold (%) <input id="f-threshold" type="number" value="65" min="0" max="100" /></label>
-          <fieldset>
-            <legend>Document formats</legend>
-            <label><input type="checkbox" class="f-format" value="docx" /> docx</label>
-            <label><input type="checkbox" class="f-format" value="pdf" /> pdf</label>
-            <label><input type="checkbox" class="f-format" value="md" /> md</label>
-          </fieldset>
-        </div>
-        <label><input id="f-dry-run" type="checkbox" /> Dry run (scrape + score only; no sheet writes, no files)</label>
-
-        <div class="actions">
-          <button id="btn-run" class="primary">Run</button>
-          <button id="btn-save-defaults">Save as my defaults</button>
-        </div>
-        <div id="run-error" class="error"></div>
-      </div>
-
-      <div class="card" id="run-live" style="display:none">
-        <h2>Run <span id="live-run-id"></span> <span id="live-stage" class="badge"></span></h2>
-        <div class="actions">
-          <button id="btn-cancel" class="danger">Cancel run</button>
-        </div>
-        <pre id="live-log" class="log"></pre>
       </div>
     </section>
 
     <!-- ============ HISTORY ============ -->
     <section id="tab-history" class="tab-panel">
-      <div class="card">
-        <h2>Run History</h2>
-        <table id="history-table">
-          <thead>
-            <tr><th>ID</th><th>Started</th><th>Status</th><th>Added</th><th>Scored</th><th>Generated</th><th></th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="card" id="run-detail" style="display:none">
-        <h2>Run detail <span id="detail-run-id"></span></h2>
-        <table id="jobs-table">
-          <thead>
-            <tr><th>Score</th><th>Company</th><th>Position</th><th>Status</th><th>Link</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div class="split">
+        <div class="pane pane-left">
+          <div class="card">
+            <h2>Run History</h2>
+            <table id="history-table">
+              <thead>
+                <tr><th>ID</th><th>Started</th><th>Status</th><th>Added</th><th>Scored</th><th>Generated</th><th></th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="pane pane-right">
+          <div class="card" id="run-detail">
+            <h2>Run detail <span id="detail-run-id"></span></h2>
+            <table id="jobs-table">
+              <thead>
+                <tr><th>Score</th><th>Company</th><th>Position</th><th>Status</th><th>Link</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -127,6 +139,10 @@
       </div>
     </section>
   </main>
+
+  <footer>
+    &copy; Prasanti Advisory &middot; Job Hunter <span class="version" id="footer-version"></span>
+  </footer>
 
   <script src="/static/app.js"></script>
 </body>

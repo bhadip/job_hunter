@@ -1,6 +1,6 @@
-# Job Hunt App
+# Job Hunter
 
-Version: 0.1.8 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.2.0 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -105,7 +105,7 @@ App listens on port 8503. Volumes:
 `docker logs jobhunt` shows the container's FULL stdout history since it was
 created - every restart appends a new block, so the startup lines appear once
 per start. Each block begins with a banner:
-    === Job Hunt vX.Y.Z starting (pid N) ===
+    === Job Hunter vX.Y.Z starting (pid N) ===
 To see only the latest start:
     docker logs --tail 30 jobhunt
     docker logs --since 10m jobhunt

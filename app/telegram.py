@@ -40,7 +40,7 @@ def send_message(text: str, log=print) -> bool:
 
 def notify_run(stats: dict, log=print) -> bool:
     lines = [
-        f"<b>Job Hunt run {_escape(stats.get('status', 'done'))}</b> (v{settings.VERSION})",
+        f"<b>Job Hunter run {_escape(stats.get('status', 'done'))}</b> (v{settings.VERSION})",
         f"Keywords: {stats.get('keywords', 0)} | Location: {_escape(stats.get('location', '-'))}",
         f"Scraped: {stats.get('scraped', 0)} | New: {stats.get('added', 0)} "
         f"| Dupes skipped: {stats.get('dupes', 0)}",

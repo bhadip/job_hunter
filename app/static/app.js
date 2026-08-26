@@ -1,10 +1,11 @@
-/* Job Hunt frontend */
+/* Job Hunter frontend */
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 let config = null;
 let me = null;
 let eventSource = null;
+let statusPoll = null;
 
 async function api(path, options = {}) {
   const resp = await fetch(path, {
@@ -156,23 +157,50 @@ $("#btn-cancel").addEventListener("click", async () => {
   }
 });
 
+function stopStatusPoll() {
+  if (statusPoll) {
+    clearInterval(statusPoll);
+    statusPoll = null;
+  }
+}
+
+function markRunFinished() {
+  $("#live-stage").textContent = "finished";
+  $("#btn-cancel").style.display = "none";
+  stopStatusPoll();
+}
+
+/* Fallback: poll the run status so the Cancel button can never get stuck
+   visible if the SSE stream drops before the "done" event arrives. */
+function startStatusPoll(runId) {
+  stopStatusPoll();
+  statusPoll = setInterval(async () => {
+    try {
+      const run = await api(`/api/runs/${runId}`);
+      if (run.status && run.status !== "running") {
+        markRunFinished();
+      }
+    } catch (e) {
+      /* transient - keep polling */
+    }
+  }, 3000);
+}
+
 function openRunStream(runId) {
   if (eventSource) eventSource.close();
-  $("#run-live").style.display = "block";
+  stopStatusPoll();
   $("#live-run-id").textContent = "#" + runId;
   $("#live-stage").textContent = "";
   $("#btn-cancel").style.display = "inline-block";
   const logEl = $("#live-log");
-  logEl.textContent = "";
-  logEl.scrollIntoView({ behavior: "smooth" });
+  logEl.textContent = "";  // clear previous run's messages on re-run
 
   eventSource = new EventSource(`/api/runs/${runId}/events`);
   eventSource.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
     if (data.type === "done") {
       logEl.textContent += "\n--- run finished ---\n";
-      $("#live-stage").textContent = "finished";
-      $("#btn-cancel").style.display = "none";
+      markRunFinished();
       eventSource.close();
       eventSource = null;
       return;
@@ -183,10 +211,11 @@ function openRunStream(runId) {
   };
   eventSource.onerror = () => {
     logEl.textContent += "\n[connection lost]\n";
-    $("#btn-cancel").style.display = "none";
+    markRunFinished();
     eventSource.close();
     eventSource = null;
   };
+  startStatusPoll(runId);
 }
 
 /* ---------- history ---------- */
@@ -214,7 +243,6 @@ async function loadHistory() {
 
 async function loadRunDetail(runId) {
   const run = await api(`/api/runs/${runId}`);
-  $("#run-detail").style.display = "block";
   $("#detail-run-id").textContent = "#" + runId;
   const tbody = $("#jobs-table tbody");
   tbody.innerHTML = "";
@@ -261,6 +289,7 @@ $("#btn-save-profile").addEventListener("click", async () => {
   config = await api("/api/config");
   me = await api("/api/me");
   $("#version").textContent = "v" + config.version;
+  $("#footer-version").textContent = "v" + config.version;
   $("#user-email").textContent = me.email;
   $("#auth-mode").textContent = config.auth_mode === "cloudflare" ? "Cloudflare Access" : "dev mode";
   renderConfigWarning();

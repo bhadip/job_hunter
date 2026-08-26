@@ -13,13 +13,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 def _read_version() -> str:
     version_file = BASE_DIR / "VERSION"
-    return version_file.read_text().strip() if version_file.exists() else "0.1.8"
+    return version_file.read_text().strip() if version_file.exists() else "0.2.0"
 
 
 APP_VERSION = _read_version()
 # Banner delimits each process start in `docker logs` (which shows the full
 # stdout history of the container across restarts, not just the latest run).
-log.info("=== Job Hunt v%s starting (pid %s) ===", APP_VERSION, os.getpid())
+log.info("=== Job Hunter v%s starting (pid %s) ===", APP_VERSION, os.getpid())
 
 SECRETS_CANDIDATES = (BASE_DIR / ".venv" / ".secrets", BASE_DIR / ".env")
 

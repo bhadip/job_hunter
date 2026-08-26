@@ -20,7 +20,7 @@ SECRETS_HINT = (
     "(it is gitignored, so git does not copy it), then run: docker compose restart"
 )
 
-app = FastAPI(title="Job Hunt App", version=settings.VERSION)
+app = FastAPI(title="Job Hunter", version=settings.VERSION)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 _PAGE_STYLE = """
@@ -40,14 +40,14 @@ def _page(title: str, body: str, detail: str) -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{title} - Job Hunt</title>
+  <title>{title} - Job Hunter</title>
   <style>{_PAGE_STYLE}</style>
 </head>
 <body>
   <div class="card">
     <h1>{title}</h1>
     {body}
-    <p class="detail">{detail} &middot; Job Hunt v{settings.VERSION}</p>
+    <p class="detail">{detail} &middot; Job Hunter v{settings.VERSION}</p>
   </div>
 </body>
 </html>"""

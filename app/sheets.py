@@ -22,6 +22,9 @@ LOG_HEADERS = ["Timestamp", "Search Parameters", "Records Added", "Start Row", "
 COL_URL = 5          # E
 COL_POSTED = "O:O"   # Posted Date column
 
+# Retry on rate-limit (429) and transient Google server errors (5xx).
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
 
 def write_with_backoff(func, *args, max_attempts=5, base_delay=20, log=print, **kwargs):
     for attempt in range(1, max_attempts + 1):
@@ -29,9 +32,12 @@ def write_with_backoff(func, *args, max_attempts=5, base_delay=20, log=print, **
             return func(*args, **kwargs)
         except gspread.exceptions.APIError as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
-            if status == 429 and attempt < max_attempts:
+            if status in _RETRYABLE_STATUS and attempt < max_attempts:
                 delay = base_delay * attempt
-                log(f"[RATE LIMIT] Sheets 429, attempt {attempt}/{max_attempts}. Waiting {delay}s...")
+                log(
+                    f"[SHEETS] HTTP {status}, attempt {attempt}/{max_attempts}. "
+                    f"Retrying in {delay}s..."
+                )
                 time.sleep(delay)
                 continue
             raise

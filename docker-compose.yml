@@ -1,7 +1,7 @@
 services:
   jobhunt:
     build: .
-    image: jobhunt:0.2.1
+    image: jobhunt:0.2.2
     container_name: jobhunt
     ports:
       - "8503:8503"

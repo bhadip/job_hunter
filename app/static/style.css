@@ -79,27 +79,47 @@ main {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .tab-panel { display: none; flex: 1 1 auto; min-height: 0; }
-.tab-panel.active { display: flex; flex-direction: column; }
+.tab-panel.active { display: flex; flex-direction: column; min-height: 0; }
 
 /* Two-pane layout: each pane scrolls independently within the viewport. */
 .split {
   display: flex;
+  flex-direction: row;
   gap: 16px;
   flex: 1 1 auto;
   min-height: 0;
   padding-bottom: 12px;
 }
 .pane { min-height: 0; display: flex; flex-direction: column; }
-.pane-left { flex: 0 0 44%; overflow-y: auto; padding-right: 4px; }
-.pane-right { flex: 1 1 auto; overflow: hidden; display: flex; flex-direction: column; }
-.pane-right .card { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0; }
+.pane-left {
+  flex: 0 0 44%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+.pane-right {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.pane-right .card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 0;
+}
 .pane-right .log { flex: 1 1 auto; height: auto; min-height: 0; }
 .pane-right table { display: block; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 
 @media (max-width: 900px) {
   body { overflow: auto; height: auto; }
+  main { overflow: visible; }
   .split { flex-direction: column; }
   .pane-left { flex: none; overflow: visible; }
   .pane-right .log { height: 320px; }

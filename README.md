@@ -1,6 +1,6 @@
 # Job Hunter
 
-Version: 0.2.1 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.2.2 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -109,6 +109,13 @@ per start. Each block begins with a banner:
 To see only the latest start:
     docker logs --tail 30 jobhunt
     docker logs --since 10m jobhunt
+
+### Google Sheets "APIError: [500]: Internal error encountered"
+A transient server-side error from Google, not a problem with your data or
+permissions. Since v0.2.2 the app retries 5xx (and 429) with backoff, so a
+one-off 500 on the run-log write resolves itself. If you also cannot open
+the spreadsheet in a browser, that is a separate issue (large sheet, browser
+state, or a Google hiccup) - the API 500 does not lock or corrupt the sheet.
 
 ### "LLM response did not contain JSON" during scoring
 The model answered with prose instead of JSON. Usual cause: a custom

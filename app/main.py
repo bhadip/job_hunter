@@ -23,8 +23,38 @@ SECRETS_HINT = (
 app = FastAPI(title="Job Hunt App", version=settings.VERSION)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+_PAGE_STYLE = """
+    body { background:#0f1419; color:#e6e9ef; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+    .card { background:#1a2230; border:1px solid #2a3547; border-radius:10px; padding:32px; max-width:560px; margin:16px; }
+    h1 { font-size:20px; margin-top:0; }
+    p, li { color:#8b98ab; font-size:14px; line-height:1.6; }
+    code { background:rgba(0,0,0,.35); padding:1px 5px; border-radius:4px; }
+    .btn { display:inline-block; background:#4f8ef7; color:#fff; text-decoration:none; padding:10px 22px; border-radius:6px; font-size:14px; margin-top:8px; }
+    .detail { font-size:12px; color:#5a6678; margin-top:24px; }
+"""
+
+
+def _page(title: str, body: str, detail: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title} - Job Hunt</title>
+  <style>{_PAGE_STYLE}</style>
+</head>
+<body>
+  <div class="card">
+    <h1>{title}</h1>
+    {body}
+    <p class="detail">{detail} &middot; Job Hunt v{settings.VERSION}</p>
+  </div>
+</body>
+</html>"""
+
 
 def _direct_access_page(detail: str) -> str:
+    """401: no token at all -> the request bypassed Cloudflare."""
     if settings.CF_APP_URL:
         link_block = (
             f'<p><a class="btn" href="{settings.CF_APP_URL}">'
@@ -37,25 +67,7 @@ def _direct_access_page(detail: str) -> str:
             "Set <code>CF_APP_URL</code> in <code>.venv/.secrets</code> to show "
             "a direct link here.</p>"
         )
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign in required - Job Hunt</title>
-  <style>
-    body {{ background:#0f1419; color:#e6e9ef; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }}
-    .card {{ background:#1a2230; border:1px solid #2a3547; border-radius:10px; padding:32px; max-width:540px; margin:16px; }}
-    h1 {{ font-size:20px; margin-top:0; }}
-    p {{ color:#8b98ab; font-size:14px; line-height:1.6; }}
-    code {{ background:rgba(0,0,0,.35); padding:1px 5px; border-radius:4px; }}
-    .btn {{ display:inline-block; background:#4f8ef7; color:#fff; text-decoration:none; padding:10px 22px; border-radius:6px; font-size:14px; margin-top:8px; }}
-    .detail {{ font-size:12px; color:#5a6678; margin-top:24px; }}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Sign in via Cloudflare Access required</h1>
+    body = f"""
     <p>You reached this app directly (by IP/port), which bypasses Cloudflare,
     so there is no identity token to verify. Direct access is blocked on
     purpose &mdash; this is the app failing closed, not an error.</p>
@@ -63,19 +75,43 @@ def _direct_access_page(detail: str) -> str:
     <p>If you are the admin and want direct LAN access instead, remove
     <code>CF_TEAM_DOMAIN</code> / <code>CF_ACCESS_AUD</code> from
     <code>.venv/.secrets</code> and restart &mdash; the app then runs in dev
-    mode (single user, no auth; do not expose it beyond your LAN).</p>
-    <p class="detail">{detail} &middot; Job Hunt v{settings.VERSION}</p>
-  </div>
-</body>
-</html>"""
+    mode (single user, no auth; do not expose it beyond your LAN).</p>"""
+    return _page("Sign in via Cloudflare Access required", body, detail)
+
+
+def _invalid_token_page(detail: str) -> str:
+    """403: a token WAS present but failed verification -> config problem."""
+    body = f"""
+    <p>A Cloudflare Access token <b>was</b> sent with your request, but it
+    failed verification. This is a configuration issue, not a bypass. The two
+    usual causes:</p>
+    <ol>
+      <li><b>No Access Application covers this hostname.</b> A tunnel
+      <i>Published Application Route</i> only forwards traffic &mdash; it does
+      not put the hostname behind Access. In Zero Trust go to
+      <b>Access &rarr; Applications &rarr; Add &rarr; Self-hosted</b>, set the
+      application domain to this exact hostname, add an Allow policy with the
+      Google identity provider, and save.</li>
+      <li><b>Wrong <code>CF_ACCESS_AUD</code>.</b> It must be the
+      <b>App AUD</b> of the application that covers <i>this</i> hostname
+      (Application &rarr; Overview), not another app's AUD and not your team
+      domain. Update <code>.venv/.secrets</code> and run
+      <code>docker compose restart</code>.</li>
+    </ol>
+    <p>Check <code>docker logs jobhunt</code> for the specific verification
+    failure (expired / audience / signature).</p>"""
+    return _page("Cloudflare Access token rejected", body, detail)
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Browsers hitting auth errors get a friendly HTML page; API calls get JSON."""
     accept = request.headers.get("accept", "")
-    if exc.status_code in (401, 403) and "text/html" in accept:
-        return HTMLResponse(content=_direct_access_page(exc.detail), status_code=exc.status_code)
+    if "text/html" in accept:
+        if exc.status_code == 401:
+            return HTMLResponse(content=_direct_access_page(exc.detail), status_code=401)
+        if exc.status_code == 403:
+            return HTMLResponse(content=_invalid_token_page(exc.detail), status_code=403)
     return JSONResponse(
         {"detail": exc.detail},
         status_code=exc.status_code,

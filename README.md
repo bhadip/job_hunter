@@ -1,6 +1,6 @@
 # Job Hunt App
 
-Version: 0.1.3 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.1.4 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -56,12 +56,16 @@ then read your chat id from:
 BOTH TELEGRAM_BOT and TELEGRAM_CHAT_ID must be set for notifications to work.
 
 ### 4. Cloudflare Access (Google IdP)
+A tunnel route alone is NOT enough - you also need an Access Application
+covering the hostname, otherwise no valid identity token is issued.
 1. Cloudflare Zero Trust -> Settings -> Authentication -> add Google as a
    login method.
-2. Access -> Applications -> add a self-hosted application covering the
-   hostname you expose for this app (e.g. via a Cloudflare Tunnel on psth1).
+2. Access -> Applications -> Add -> Self-hosted. Set the application domain
+   to the exact hostname (e.g. subdomain "jobhunter", domain "prasanti.com").
+   Add an Allow policy (e.g. your email) and select Google as the IdP.
 3. Copy the team domain (Settings -> General, e.g. yourteam.cloudflareaccess.com)
-   into CF_TEAM_DOMAIN and the application's AUD tag into CF_ACCESS_AUD.
+   into CF_TEAM_DOMAIN, and THIS application's App AUD tag (Application ->
+   Overview) into CF_ACCESS_AUD.
 4. Optionally set CF_APP_URL to the app's public URL - it is shown as a
    "continue" link on the page served to browsers that hit the app directly.
 If CF_TEAM_DOMAIN / CF_ACCESS_AUD are empty the app runs in dev mode with a
@@ -85,14 +89,24 @@ App listens on port 8503. Volumes:
 
 ## Troubleshooting
 
-### "Missing Cloudflare Access credentials" when opening the app
+### "Missing Cloudflare Access credentials" (401) when opening the app
 You are opening the app by IP:port (e.g. http://192.168.50.2:8503), which
 bypasses Cloudflare entirely - no identity token exists on that path, so the
 app rejects the request. Open it via the Cloudflare-protected hostname from
-your Access application instead (e.g. https://jobhunt.yourdomain.com). This
+your Access application instead (e.g. https://jobhunter.prasanti.com). This
 applies to all browsers; incognito vs regular makes no difference. If you
 want direct LAN access without auth, remove CF_TEAM_DOMAIN / CF_ACCESS_AUD
 from .venv/.secrets and restart (dev mode - LAN only).
+
+### "Invalid Cloudflare Access token" (403) even via the tunnel hostname
+A token WAS sent but failed verification. Two usual causes:
+1. No Access Application covers the hostname. A tunnel "Published
+   Application Route" only forwards traffic; it does not enable Access.
+   Create the Self-hosted application for the exact hostname (see setup #4).
+2. CF_ACCESS_AUD is wrong. It must be the App AUD of the application that
+   covers this hostname, not another app's AUD and not your team domain.
+Check the specific reason in the logs:
+    docker logs jobhunt | grep -i "access token"
 
 ### "X is not configured" (or the UI warning banner)
 The app reads .venv/.secrets once at process start. Check, on psth1:

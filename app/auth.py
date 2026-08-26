@@ -46,6 +46,21 @@ def get_current_user(request: Request) -> dict:
             algorithms=["RS256"],
             audience=settings.CF_ACCESS_AUD,
         )
+    except jwt.ExpiredSignatureError:
+        log.warning("Cloudflare Access token expired.")
+        raise HTTPException(
+            status_code=403,
+            detail="Cloudflare Access token expired - reload the page to sign in again.",
+        )
+    except jwt.InvalidAudienceError:
+        log.warning(
+            "Cloudflare Access token audience mismatch. The CF_ACCESS_AUD value does not "
+            "match the AUD of the Access application covering this hostname."
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Access token audience mismatch (wrong CF_ACCESS_AUD).",
+        )
     except jwt.PyJWTError as exc:
         log.warning("Cloudflare Access token verification failed: %s", exc)
         raise HTTPException(status_code=403, detail="Invalid Cloudflare Access token")

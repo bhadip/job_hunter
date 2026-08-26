@@ -98,12 +98,11 @@ def execute(run_id: int, params, user: dict, emit, cancel_event):
     emit("Stage 2/5: Writing to Google Sheet...", stage="sheet")
     if not settings.sheets_credentials_file_exists:
         raise RuntimeError(
-            "Google credentials file not found at "
-            f"'{settings.GOOGLE_APPLICATION_CREDENTIALS}'. Place your service-account "
-            "JSON key at ./data/credentials.json on the host (it is mounted into the "
-            "container at /app/data/credentials.json), then run 'docker compose restart'. "
-            "Note: docker-compose sets GOOGLE_APPLICATION_CREDENTIALS to that container "
-            "path, which overrides any host path in .venv/.secrets."
+            "Google service-account credentials not found. The app tries "
+            f"'{settings.GOOGLE_APPLICATION_CREDENTIALS}' and then auto-discovers any "
+            "service-account JSON key in ./data on the host (mounted at /app/data). "
+            "Copy your key into ./data - any .json filename works - then run "
+            "'docker compose restart'."
         )
     writer = sheets.SheetWriter(log=log)
     existing = writer.existing_urls()

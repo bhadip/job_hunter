@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -8,6 +9,17 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 log = logging.getLogger("jobhunt.config")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _read_version() -> str:
+    version_file = BASE_DIR / "VERSION"
+    return version_file.read_text().strip() if version_file.exists() else "0.1.6"
+
+
+APP_VERSION = _read_version()
+# Banner delimits each process start in `docker logs` (which shows the full
+# stdout history of the container across restarts, not just the latest run).
+log.info("=== Job Hunt v%s starting (pid %s) ===", APP_VERSION, os.getpid())
 
 SECRETS_CANDIDATES = (BASE_DIR / ".venv" / ".secrets", BASE_DIR / ".env")
 
@@ -48,13 +60,8 @@ def _missing(*keys: str) -> list:
     return [k for k in keys if not _env(k)]
 
 
-def _read_version() -> str:
-    version_file = BASE_DIR / "VERSION"
-    return version_file.read_text().strip() if version_file.exists() else "0.1.5"
-
-
 class Settings:
-    VERSION = _read_version()
+    VERSION = APP_VERSION
     PORT = int(_env("PORT", "8503"))
     TIMEZONE = _env("APP_TIMEZONE", "Asia/Singapore")
 
@@ -125,15 +132,63 @@ class Settings:
         return bool(self.TELEGRAM_BOT and self.TELEGRAM_CHAT_ID)
 
     @property
+    def resolved_google_credentials(self) -> str:
+        """Path to the service-account key that will actually be used.
+
+        If the configured path does not exist (e.g. the key kept its original
+        downloaded filename), auto-discover any service-account JSON file in
+        DATA_DIR. Falls back to the configured path (possibly missing) so the
+        caller can report a useful error.
+        """
+        configured = self.GOOGLE_APPLICATION_CREDENTIALS
+        if configured and Path(configured).is_file():
+            return configured
+        discovered = ""
+        try:
+            for path in sorted(self.DATA_DIR.glob("*.json")):
+                try:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        if json.load(fh).get("type") == "service_account":
+                            discovered = str(path)
+                            break
+                except (OSError, ValueError):
+                    continue
+        except OSError:
+            pass
+        return discovered or configured
+
+    @property
     def sheets_configured(self) -> bool:
-        return bool(self.GOOGLE_APPLICATION_CREDENTIALS)
+        return bool(self.resolved_google_credentials)
 
     @property
     def sheets_credentials_file_exists(self) -> bool:
-        """Whether the service-account JSON file is actually present."""
-        if not self.GOOGLE_APPLICATION_CREDENTIALS:
-            return False
-        return Path(self.GOOGLE_APPLICATION_CREDENTIALS).is_file()
+        """Whether a usable service-account JSON file is actually present."""
+        resolved = self.resolved_google_credentials
+        return bool(resolved) and Path(resolved).is_file()
+
+    @property
+    def resolved_assessment_prompt_path(self) -> str:
+        """Path to the assessment prompt file that will actually be used.
+
+        If the configured path does not exist, auto-discover a markdown file
+        in DATA_DIR (a single .md, or one whose name contains 'prompt').
+        """
+        configured = self.DEFAULT_JD_ASSESSMENT_PROMPT
+        if configured and Path(configured).is_file():
+            return configured
+        try:
+            mds = sorted(self.DATA_DIR.glob("*.md"))
+        except OSError:
+            mds = []
+        if not mds:
+            return configured
+        named = [p for p in mds if "prompt" in p.name.lower()]
+        if named:
+            return str(named[0])
+        if len(mds) == 1:
+            return str(mds[0])
+        return configured
 
     @property
     def missing_keys(self) -> dict:
@@ -165,23 +220,44 @@ else:
     # Only one of the two CF vars set - a broken half-configuration.
     _cf_status = _fmt_status("cloudflare", _missing_map["cloudflare"])
 
+if settings.sheets_configured:
+    _sheets_status = "sheets=True"
+else:
+    _sheets_status = _fmt_status("sheets", _missing_map["sheets"])
+
 log.info(
     "Config status: %s | %s | %s | %s",
     _fmt_status("llm", _missing_map["llm"]),
-    _fmt_status("sheets", _missing_map["sheets"]),
+    _sheets_status,
     _fmt_status("telegram", _missing_map["telegram"]),
     _cf_status,
 )
 
 # The credentials env var can be set while the file itself is absent (e.g. the
-# host path was never copied into ./data). Surface that distinctly.
+# key kept its original downloaded filename in ./data). Surface that distinctly.
 if settings.sheets_configured:
+    _resolved_creds = settings.resolved_google_credentials
     if settings.sheets_credentials_file_exists:
-        log.info("Config status: sheets-creds-file=OK (%s)", settings.GOOGLE_APPLICATION_CREDENTIALS)
+        _auto = " (auto-discovered)" if _resolved_creds != settings.GOOGLE_APPLICATION_CREDENTIALS else ""
+        log.info("Config status: sheets-creds-file=OK (%s%s)", _resolved_creds, _auto)
     else:
         log.warning(
-            "Config status: sheets-creds-file=MISSING (%s). Place the service-account "
-            "JSON key at ./data/credentials.json on the host (it is mounted to /app/data) "
-            "and restart.",
+            "Config status: sheets-creds-file=MISSING (%s). Copy the service-account "
+            "JSON key into ./data on the host - any .json filename works, it is "
+            "auto-discovered - then restart.",
             settings.GOOGLE_APPLICATION_CREDENTIALS,
         )
+
+# Same for the JD assessment prompt file.
+_prompt_path = settings.resolved_assessment_prompt_path
+if _prompt_path and Path(_prompt_path).is_file():
+    _auto = " (auto-discovered)" if _prompt_path != settings.DEFAULT_JD_ASSESSMENT_PROMPT else ""
+    log.info("Config status: assessment-prompt-file=OK (%s%s)", _prompt_path, _auto)
+elif settings.DEFAULT_JD_ASSESSMENT_PROMPT:
+    log.warning(
+        "Config status: assessment-prompt-file=MISSING (%s) - the built-in default "
+        "prompt will be used. Copy the .md file into ./data on the host and restart.",
+        settings.DEFAULT_JD_ASSESSMENT_PROMPT,
+    )
+else:
+    log.info("Config status: assessment-prompt-file=UNSET - built-in default prompt will be used.")

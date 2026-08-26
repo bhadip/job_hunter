@@ -1,6 +1,6 @@
 # Job Hunt App
 
-Version: 0.1.5 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.1.6 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -24,18 +24,20 @@ saved search defaults, and run history.
 ### 1. Google service account
 1. Google Cloud Console -> create/select a project -> enable "Google Sheets API".
 2. Create a service account, download its JSON key.
-3. Save the key as ./data/credentials.json (docker-compose points
-   GOOGLE_APPLICATION_CREDENTIALS at /app/data/credentials.json).
+3. Copy the key into ./data/ on the host. Any .json filename works - the app
+   auto-discovers service-account keys in ./data (it checks the "type":
+   "service_account" field). ./data/credentials.json is the canonical name
+   that docker-compose points GOOGLE_APPLICATION_CREDENTIALS at.
 4. Share the "Job_Applications_v3" sheet with the service account's
    client_email as Editor. Afterwards you can switch the sheet's link
    sharing back to "Restricted" so only you and the app can access it.
 
-IMPORTANT: the credentials file must live at ./data/credentials.json on the
-host. The container only mounts ./data, ./output and ./.venv - a key placed
-anywhere else (e.g. the repo root) is invisible inside the container. Also,
+IMPORTANT: the credentials file must live in ./data/ on the host. The
+container only mounts ./data, ./output and ./.venv - a key placed anywhere
+else (e.g. the repo root) is invisible inside the container. Also,
 docker-compose sets GOOGLE_APPLICATION_CREDENTIALS=/app/data/credentials.json
 as a container env var, which OVERRIDES any value in .venv/.secrets - so do
-not rely on .secrets to point at the key; just put the file at ./data/.
+not rely on .secrets to point at the key; just put the file in ./data/.
 
 ### 2. Secrets file (.venv/.secrets)
 KEY=VALUE lines, e.g.:
@@ -55,6 +57,9 @@ clone/pull. You must create it by hand on every machine that runs the app
 (including psth1), next to docker-compose.yml. Because the file is only
 read inside the container, any file paths in it must be container paths
 (e.g. put the prompt template in ./data/ and reference /app/data/...).
+If DEFAULT_JD_ASSESSMENT_PROMPT points at a missing file, the app
+auto-discovers a markdown file in ./data (a single .md, or one whose name
+contains "prompt") and falls back to a built-in default otherwise.
 
 ### 3. Telegram
 Create a bot via @BotFather to get TELEGRAM_BOT. Send the bot any message,
@@ -90,24 +95,35 @@ This is intentional fail-closed behavior.
     docker compose up -d
 
 App listens on port 8503. Volumes:
-    ./data    -> SQLite DB, credentials.json
+    ./data    -> SQLite DB, credentials.json (any service-account .json works)
     ./output  -> generated resumes & cover letters (per user / per run)
     ./.venv   -> read-only, only .secrets is read from it
 
 ## Troubleshooting
 
-### "Google credentials file not found" / Errno 2 on credentials.json
-The app reads the service-account key inside the container at
-/app/data/credentials.json. Fix:
-1. Copy the key into the mounted data dir on the host:
-       cp /path/to/your-key.json ./data/credentials.json
+### Reading the logs
+`docker logs jobhunt` shows the container's FULL stdout history since it was
+created - every restart appends a new block, so the startup lines appear once
+per start. Each block begins with a banner:
+    === Job Hunt vX.Y.Z starting (pid N) ===
+To see only the latest start:
+    docker logs --tail 30 jobhunt
+    docker logs --since 10m jobhunt
+
+### "Google credentials file not found" / sheets-creds-file=MISSING
+The app reads the service-account key inside the container. Fix:
+1. Copy the key into the mounted data dir on the host (any .json filename
+   works - service-account keys are auto-discovered):
+       cp /path/to/your-key.json ./data/
 2. Restart:
        docker compose restart
 Confirm at startup:
-       docker logs jobhunt | grep -i "sheets-creds-file"
-   -> should print "sheets-creds-file=OK".
-Note: docker-compose hard-sets GOOGLE_APPLICATION_CREDENTIALS to that
-container path, overriding any host path in .venv/.secrets.
+       docker logs --tail 30 jobhunt | grep -i "sheets-creds-file"
+   -> should print "sheets-creds-file=OK" (possibly "auto-discovered").
+If it is still MISSING, check what the container actually sees:
+       docker exec jobhunt ls -la /app/data
+Note: docker-compose hard-sets GOOGLE_APPLICATION_CREDENTIALS to
+/app/data/credentials.json, overriding any host path in .venv/.secrets.
 
 ### "Missing Cloudflare Access credentials" (401) when opening the app
 You are opening the app by IP:port (e.g. http://192.168.50.2:8503), which
@@ -143,7 +159,7 @@ The app reads .venv/.secrets once at process start. Check, on psth1:
 3. Restart after any edit to .secrets:
        docker compose restart
 4. Confirm what the app actually loaded (values are never logged):
-       docker logs jobhunt | grep -i -E "secrets|config status"
+       docker logs --tail 30 jobhunt | grep -i -E "secrets|config status"
    The status line names the exact missing keys, e.g.:
        telegram=False (missing: TELEGRAM_CHAT_ID)
 The UI also shows a warning banner listing exactly which keys are missing

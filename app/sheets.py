@@ -59,7 +59,7 @@ class SheetWriter:
     def __init__(self, log=print):
         self.log = log
         creds = Credentials.from_service_account_file(
-            settings.GOOGLE_APPLICATION_CREDENTIALS, scopes=SCOPES
+            settings.resolved_google_credentials, scopes=SCOPES
         )
         gc = gspread.authorize(creds)
         self.sh = gc.open_by_key(settings.GOOGLE_SHEET_ID)

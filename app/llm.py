@@ -87,7 +87,7 @@ def fill_template(template: str, resume: str, job_description: str) -> str:
 
 
 def load_default_assessment_prompt() -> str:
-    path = settings.DEFAULT_JD_ASSESSMENT_PROMPT
+    path = settings.resolved_assessment_prompt_path
     if path:
         try:
             with open(path, "r", encoding="utf-8") as fh:

@@ -1,6 +1,6 @@
 # Job Hunter
 
-Version: 0.2.2 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.2.3 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -110,6 +110,15 @@ To see only the latest start:
     docker logs --tail 30 jobhunt
     docker logs --since 10m jobhunt
 
+### All scores are 0% / "No job description or master resume was provided"
+The LLM was called but received no resume or job description content. Usual
+cause: a custom assessment prompt template that lacks {resume} and
+{job_description} placeholders (or phrases them differently), so the content
+was never injected. Since v0.2.3 the app ALWAYS appends both documents to
+the prompt in clearly-marked sections, regardless of placeholders - so this
+cannot recur. If you still see 0% scores, check that your master resume is
+saved in the Profile tab.
+
 ### Google Sheets "APIError: [500]: Internal error encountered"
 A transient server-side error from Google, not a problem with your data or
 permissions. Since v0.2.2 the app retries 5xx (and 429) with backoff, so a
@@ -208,9 +217,11 @@ List the key names in your file without exposing any values:
 
 ## Notes & limitations
 - The assessment prompt template may use {resume} and {job_description}
-  placeholders. A mandatory JSON-output instruction (keys: score,
-  skill_gaps, tailored_bullets) is appended automatically at runtime, so
-  custom templates do not need to specify an output format.
+  placeholders. Both documents are ALWAYS appended to the prompt in
+  clearly-marked sections regardless of placeholders, and a mandatory
+  JSON-output instruction (keys: score, skill_gaps, tailored_bullets) is
+  appended automatically at runtime, so custom templates do not need to
+  specify an output format.
 - The Distance filter is entered in kilometres in the UI; the app converts
   to miles for LinkedIn's guest API, which only accepts miles.
 - PDF output uses built-in fonts; non-latin characters are transliterated.

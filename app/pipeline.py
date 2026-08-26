@@ -71,6 +71,7 @@ def execute(run_id: int, params, user: dict, emit, cancel_event):
         "location": params.location,
         "threshold": params.score_threshold,
         "dry_run": params.dry_run,
+        "user_email": user.get("email", ""),
         "scraped": 0, "added": 0, "dupes": 0, "scored": 0,
         "qualified": 0, "generated": 0, "tokens": 0, "errors": 0,
         "error_details": [],

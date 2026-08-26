@@ -32,13 +32,7 @@ master resume matches a job description.
 Assess honestly across: domain/industry alignment, seniority fit, required
 vs preferred skills, and transferable experience. Do not inflate the score.
 A score of 65+ means the candidate is a credible applicant worth tailoring
-a resume for.
-
-=== CANDIDATE MASTER RESUME ===
-{resume}
-
-=== JOB DESCRIPTION ===
-{job_description}"""
+a resume for."""
 
 RESUME_PROMPT = """You are an expert resume writer. Rewrite the candidate's master resume,
 tailored to the job description below.
@@ -89,9 +83,22 @@ def _client() -> OpenAI:
 
 
 def fill_template(template: str, resume: str, job_description: str) -> str:
+    """Fill {resume}/{job_description} placeholders if present, then ALWAYS
+    append both documents in clearly-marked sections.
+
+    Templates written for interactive use often lack placeholders or phrase
+    them differently, which previously meant the model received no content at
+    all. Appending unconditionally guarantees the model always sees both.
+    """
     out = template
     for key, val in (("resume", resume), ("job_description", job_description)):
         out = out.replace("{" + key + "}", val).replace("{{" + key + "}}", val)
+    out += (
+        "\n\n=== CANDIDATE MASTER RESUME ===\n"
+        + resume
+        + "\n\n=== JOB DESCRIPTION ===\n"
+        + job_description
+    )
     return out
 
 

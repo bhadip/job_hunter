@@ -57,6 +57,35 @@ def extract_applicant_count(text: str):
     return int(match.group(1)) if match else None
 
 
+def _get_with_retry(url: str, params: dict = None, max_attempts: int = 3, base_delay: int = 5, log=print):
+    """GET with retry+backoff on 5xx responses and network errors.
+
+    Returns None if the request never succeeded at the network level;
+    otherwise returns the last response (caller checks status_code).
+    """
+    response = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.get(url, params=params, headers=HEADERS, timeout=15)
+        except requests.RequestException as exc:
+            if attempt < max_attempts:
+                delay = base_delay * attempt
+                log(f"Network error ({exc}); retrying in {delay}s (attempt {attempt}/{max_attempts})...")
+                time.sleep(delay)
+                continue
+            log(f"Request to {url} failed after {max_attempts} attempts: {exc}")
+            return None
+        if response.status_code < 500 or attempt == max_attempts:
+            return response
+        delay = base_delay * attempt
+        log(
+            f"HTTP {response.status_code} from LinkedIn; retrying in {delay}s "
+            f"(attempt {attempt}/{max_attempts})..."
+        )
+        time.sleep(delay)
+    return response
+
+
 def _parse_posted_date(time_tag) -> datetime.date:
     if not time_tag:
         return None
@@ -115,9 +144,11 @@ def fetch_jobs(params, keyword: str, offset: int, log=print) -> list:
     try:
         query = {"keywords": keyword, "location": params.location, "start": offset}
         query.update(build_filter_params(params))
-        res = requests.get(SEARCH_URL, params=query, headers=HEADERS, timeout=15)
+        res = _get_with_retry(SEARCH_URL, params=query, log=log)
+        if res is None:
+            return []
         if res.status_code != 200:
-            log(f"Search HTTP {res.status_code} for '{keyword}' (offset {offset})")
+            log(f"Search HTTP {res.status_code} for '{keyword}' (offset {offset}) after retries")
             return []
 
         soup = BeautifulSoup(res.text, "html.parser")
@@ -146,11 +177,9 @@ def fetch_jobs(params, keyword: str, offset: int, log=print) -> list:
             posted_str = posted_date.strftime("%Y-%m-%d") if posted_date else ""
 
             job_id = job_url.split("-")[-1].split("/")[-1]
-            desc_res = requests.get(
-                POSTING_URL.format(job_id=job_id), headers=HEADERS, timeout=15
-            )
+            desc_res = _get_with_retry(POSTING_URL.format(job_id=job_id), log=log)
             description = "Manual review required."
-            if desc_res.status_code == 200:
+            if desc_res is not None and desc_res.status_code == 200:
                 desc_soup = BeautifulSoup(desc_res.text, "html.parser")
                 desc_tag = desc_soup.select_one(
                     ".description__text, .show-more-less-html__markup"
@@ -160,6 +189,8 @@ def fetch_jobs(params, keyword: str, offset: int, log=print) -> list:
                 if _is_dead_posting(desc_res.text, description):
                     log(f"Skipping '{title}' ({company}) - posting no longer exists (404).")
                     continue
+            elif desc_res is None:
+                description = "Manual review required (network error on description fetch)."
             else:
                 description = (
                     f"Manual review required (HTTP {desc_res.status_code} "

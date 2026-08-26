@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 def _read_version() -> str:
     version_file = BASE_DIR / "VERSION"
-    return version_file.read_text().strip() if version_file.exists() else "0.1.6"
+    return version_file.read_text().strip() if version_file.exists() else "0.1.8"
 
 
 APP_VERSION = _read_version()
@@ -79,6 +79,9 @@ class Settings:
     OPENAI_MODEL_SCORE = _env("OPENAI_MODEL_SCORE", "gpt-4o-mini")
     OPENAI_MODEL_GENERATE = _env("OPENAI_MODEL_GENERATE", "gpt-4o")
     DEFAULT_JD_ASSESSMENT_PROMPT = _env("DEFAULT_JD_ASSESSMENT_PROMPT") or _env("DEFAULT_ASSESSMENT_PROMPT")
+    # Ask the API for guaranteed-JSON output on scoring calls. Off by default;
+    # if the endpoint rejects response_format the call is retried without it.
+    OPENAI_JSON_MODE = _env("OPENAI_JSON_MODE", "").lower() in ("1", "true", "yes")
 
     # Telegram
     TELEGRAM_BOT = _env("TELEGRAM_BOT")

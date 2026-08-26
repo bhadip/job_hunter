@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 
 from openai import APIConnectionError, APIError, OpenAI, RateLimitError
@@ -9,6 +10,21 @@ from .config import settings
 log = logging.getLogger("jobhunt.llm")
 
 MAX_JD_CHARS = 12000  # token-cost guard for scoring
+
+# Appended to every assessment prompt (built-in default or custom template) so
+# the pipeline always gets machine-readable output back, even when the template
+# itself was written for interactive use and specifies no output format.
+JSON_OUTPUT_INSTRUCTION = """
+
+---
+OUTPUT FORMAT (mandatory - overrides any other formatting instruction above):
+After completing your assessment, respond with ONLY a single valid JSON object
+- no markdown fences, no commentary before or after - with exactly these keys:
+{
+  "score": <integer 0-100>,
+  "skill_gaps": "<1-2 sentences: what the JD requires that the resume lacks>",
+  "tailored_bullets": "<2-4 sentences: concrete strategy for tailoring the resume to this JD>"
+}"""
 
 BUILTIN_ASSESSMENT_PROMPT = """You are an expert career coach evaluating how well a candidate's
 master resume matches a job description.
@@ -22,14 +38,7 @@ a resume for.
 {resume}
 
 === JOB DESCRIPTION ===
-{job_description}
-
-Respond with ONLY valid JSON (no markdown fences, no commentary):
-{{
-  "score": <integer 0-100>,
-  "skill_gaps": "<1-2 sentences: what the JD requires that the resume lacks>",
-  "tailored_bullets": "<2-4 sentences: concrete strategy for tailoring the resume to this JD>"
-}}"""
+{job_description}"""
 
 RESUME_PROMPT = """You are an expert resume writer. Rewrite the candidate's master resume,
 tailored to the job description below.
@@ -104,9 +113,16 @@ def load_default_assessment_prompt() -> str:
     return BUILTIN_ASSESSMENT_PROMPT
 
 
-def _chat(model: str, user_prompt: str, max_tokens: int, log=print) -> tuple:
-    """Returns (text, total_tokens). Retries with backoff on transient errors."""
+def _chat(model: str, user_prompt: str, max_tokens: int, log=print, json_mode: bool = False) -> tuple:
+    """Returns (text, total_tokens). Retries with backoff on transient errors.
+
+    json_mode asks the API for guaranteed JSON output; if the endpoint rejects
+    response_format, it is dropped automatically and the call retried plainly.
+    """
     client = _client()
+    kwargs = {}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
     for attempt in range(1, 5):
         try:
             resp = client.chat.completions.create(
@@ -114,11 +130,17 @@ def _chat(model: str, user_prompt: str, max_tokens: int, log=print) -> tuple:
                 messages=[{"role": "user", "content": user_prompt}],
                 max_tokens=max_tokens,
                 temperature=0.3,
+                **kwargs,
             )
             usage = getattr(resp, "usage", None)
             tokens = (usage.prompt_tokens + usage.completion_tokens) if usage else 0
             return resp.choices[0].message.content.strip(), tokens
         except (RateLimitError, APIConnectionError, APIError) as exc:
+            if json_mode and "response_format" in str(exc):
+                log("[LLM] Endpoint rejected response_format; retrying without JSON mode.")
+                json_mode = False
+                kwargs.pop("response_format", None)
+                continue
             if attempt == 4:
                 raise
             delay = 10 * attempt
@@ -143,10 +165,45 @@ def _parse_json(text: str) -> dict:
     return json.loads(cleaned[start : end + 1])
 
 
+def _fallback_parse(text: str, log=print) -> dict:
+    """Last-resort extraction when the model ignored the JSON instruction.
+
+    Surfaces the raw response in the run log so the prompt template can be
+    debugged, then tries to salvage at least the score via regex.
+    """
+    log(
+        "[LLM] Response was not valid JSON; attempting score extraction. "
+        f"Raw response (first 400 chars): {text[:400]!r}"
+    )
+    match = re.search(r'"score"\s*:\s*"?(\d{1,3})', text, re.IGNORECASE)
+    if not match:
+        match = re.search(r"\bscore\b[^\d]{0,25}(\d{1,3})\s*(?:%|/100|percent)?", text, re.IGNORECASE)
+    if match:
+        value = int(match.group(1))
+        if 0 <= value <= 100:
+            log(f"[LLM] Fallback extracted score={value} from non-JSON response.")
+            return {
+                "score": value,
+                "skill_gaps": "(LLM returned a non-JSON response; only the score could be extracted)",
+                "tailored_bullets": "",
+            }
+    raise ValueError("LLM response did not contain JSON or a recognizable score")
+
+
 def assess_job(prompt_template: str, resume: str, job_description: str, log=print) -> dict:
     prompt = fill_template(prompt_template, resume, job_description[:MAX_JD_CHARS])
-    text, tokens = _chat(settings.OPENAI_MODEL_SCORE, prompt, max_tokens=800, log=log)
-    data = _parse_json(text)
+    prompt += JSON_OUTPUT_INSTRUCTION
+    text, tokens = _chat(
+        settings.OPENAI_MODEL_SCORE,
+        prompt,
+        max_tokens=2000,
+        log=log,
+        json_mode=settings.OPENAI_JSON_MODE,
+    )
+    try:
+        data = _parse_json(text)
+    except ValueError:
+        data = _fallback_parse(text, log)
     score = data.get("score")
     try:
         score = max(0, min(100, int(round(float(score)))))

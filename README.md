@@ -1,6 +1,6 @@
 # Job Hunt App
 
-Version: 0.1.7 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.1.8 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -110,6 +110,24 @@ To see only the latest start:
     docker logs --tail 30 jobhunt
     docker logs --since 10m jobhunt
 
+### "LLM response did not contain JSON" during scoring
+The model answered with prose instead of JSON. Usual cause: a custom
+assessment prompt template that does not specify a JSON output format. Since
+v0.1.8 the app appends a mandatory JSON-output instruction to whatever
+template is used, so this should not recur - your template's analysis
+criteria still apply, only the output format is enforced. If it still fails:
+- The run log now prints the first 400 chars of the raw LLM response, so you
+  can see exactly what the model returned.
+- A regex fallback salvages the score from prose when possible (the sheet
+  then shows the score with a note in Skill Gaps).
+- If your endpoint supports it, set OPENAI_JSON_MODE=true in .venv/.secrets
+  to enforce JSON at the API level (auto-falls back if unsupported).
+
+### "Search HTTP 500" from LinkedIn
+Transient error from LinkedIn's guest endpoint. Since v0.1.8 the scraper
+retries 5xx and network errors with backoff (3 attempts). If a keyword still
+fails after retries, the run continues with the remaining keywords.
+
 ### LLM scoring fails with "Client.__init__() got an unexpected keyword argument 'proxies'"
 Dependency conflict: the openai SDK passes `proxies` to httpx, but httpx
 0.28+ removed that argument. requirements.txt pins httpx==0.27.* to stay
@@ -183,9 +201,11 @@ List the key names in your file without exposing any values:
 
 ## Notes & limitations
 - The assessment prompt template may use {resume} and {job_description}
-  placeholders and must ask for JSON with keys: score, skill_gaps,
-  tailored_bullets. A built-in default is used if no file is configured.
+  placeholders. A mandatory JSON-output instruction (keys: score,
+  skill_gaps, tailored_bullets) is appended automatically at runtime, so
+  custom templates do not need to specify an output format.
 - PDF output uses built-in fonts; non-latin characters are transliterated.
   docx and md preserve full unicode.
 - LinkedIn's guest endpoint is unofficial and rate-limited; the scraper is
-  polite (sleeps between requests) and skips dead/404 postings.
+  polite (sleeps between requests), retries transient 5xx errors, and skips
+  dead/404 postings.

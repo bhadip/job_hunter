@@ -73,6 +73,7 @@ def execute(run_id: int, params, user: dict, emit, cancel_event):
         "dry_run": params.dry_run,
         "scraped": 0, "added": 0, "dupes": 0, "scored": 0,
         "qualified": 0, "generated": 0, "tokens": 0, "errors": 0,
+        "error_details": [],
         "top_matches": [],
     }
 
@@ -165,6 +166,7 @@ def execute(run_id: int, params, user: dict, emit, cancel_event):
                 )
         except Exception as exc:
             stats["errors"] += 1
+            stats["error_details"].append(f"Scoring {job['company']}: {exc}")
             emit(f"  Scoring failed for {job['url']}: {exc}")
     if sheet_updates:
         writer.update_assessments(sheet_updates)
@@ -215,6 +217,7 @@ def execute(run_id: int, params, user: dict, emit, cancel_event):
             emit(f"  Generated {', '.join(params.formats)} for {job['company']}: {job['title']}")
         except Exception as exc:
             stats["errors"] += 1
+            stats["error_details"].append(f"Generation {job['company']}: {exc}")
             emit(f"  Generation failed for {job['url']}: {exc}")
     if gen_updates:
         writer.update_generated(gen_updates)

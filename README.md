@@ -1,6 +1,6 @@
 # Job Hunt App
 
-Version: 0.1.6 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.1.7 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -109,6 +109,12 @@ per start. Each block begins with a banner:
 To see only the latest start:
     docker logs --tail 30 jobhunt
     docker logs --since 10m jobhunt
+
+### LLM scoring fails with "Client.__init__() got an unexpected keyword argument 'proxies'"
+Dependency conflict: the openai SDK passes `proxies` to httpx, but httpx
+0.28+ removed that argument. requirements.txt pins httpx==0.27.* to stay
+compatible with openai==1.54.*. Rebuild the image to pick up the pin:
+    docker compose up -d --build
 
 ### "Google credentials file not found" / sheets-creds-file=MISSING
 The app reads the service-account key inside the container. Fix:

@@ -6,6 +6,11 @@ API = "https://api.telegram.org/bot{token}/sendMessage"
 MAX_LEN = 4000
 
 
+def _escape(text) -> str:
+    """Escape HTML special chars for Telegram's HTML parse mode."""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def send_message(text: str, log=print) -> bool:
     if not settings.telegram_configured:
         log("[TELEGRAM] Not configured - skipping notification.")
@@ -35,8 +40,8 @@ def send_message(text: str, log=print) -> bool:
 
 def notify_run(stats: dict, log=print) -> bool:
     lines = [
-        f"<b>Job Hunt run {stats.get('status', 'done')}</b> (v{settings.VERSION})",
-        f"Keywords: {stats.get('keywords', 0)} | Location: {stats.get('location', '-')}",
+        f"<b>Job Hunt run {_escape(stats.get('status', 'done'))}</b> (v{settings.VERSION})",
+        f"Keywords: {stats.get('keywords', 0)} | Location: {_escape(stats.get('location', '-'))}",
         f"Scraped: {stats.get('scraped', 0)} | New: {stats.get('added', 0)} "
         f"| Dupes skipped: {stats.get('dupes', 0)}",
         f"Scored: {stats.get('scored', 0)} | >= {stats.get('threshold', 65)}%: "
@@ -52,13 +57,15 @@ def notify_run(stats: dict, log=print) -> bool:
         lines.append("<b>Top matches:</b>")
         for match in top[:5]:
             lines.append(
-                f"- {match['score']}% - {match['company']}: {match['position']}\n"
-                f"  {match['url']}"
+                f"- {match['score']}% - {_escape(match['company'])}: {_escape(match['position'])}\n"
+                f"  {_escape(match['url'])}"
             )
     if stats.get("output_dir"):
         lines.append("")
-        lines.append(f"Output: {stats['output_dir']}")
+        lines.append(f"Output: {_escape(stats['output_dir'])}")
     if stats.get("errors"):
         lines.append("")
-        lines.append(f"Errors: {stats['errors']}")
+        lines.append(f"<b>Errors: {stats['errors']}</b>")
+        for detail in (stats.get("error_details") or [])[:5]:
+            lines.append(f"- {_escape(str(detail)[:200])}")
     return send_message("\n".join(lines), log=log)

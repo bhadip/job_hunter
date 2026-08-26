@@ -161,6 +161,7 @@ function openRunStream(runId) {
   $("#run-live").style.display = "block";
   $("#live-run-id").textContent = "#" + runId;
   $("#live-stage").textContent = "";
+  $("#btn-cancel").style.display = "inline-block";
   const logEl = $("#live-log");
   logEl.textContent = "";
   logEl.scrollIntoView({ behavior: "smooth" });
@@ -170,6 +171,8 @@ function openRunStream(runId) {
     const data = JSON.parse(ev.data);
     if (data.type === "done") {
       logEl.textContent += "\n--- run finished ---\n";
+      $("#live-stage").textContent = "finished";
+      $("#btn-cancel").style.display = "none";
       eventSource.close();
       eventSource = null;
       return;
@@ -180,6 +183,7 @@ function openRunStream(runId) {
   };
   eventSource.onerror = () => {
     logEl.textContent += "\n[connection lost]\n";
+    $("#btn-cancel").style.display = "none";
     eventSource.close();
     eventSource = null;
   };

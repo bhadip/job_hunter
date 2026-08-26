@@ -33,6 +33,7 @@ $$(".tab").forEach((btn) =>
 
 /* ---------- config warning banner ---------- */
 function renderConfigWarning() {
+  const missing = config.missing_keys || {};
   const problems = [];
   if (!config.secrets_loaded_from || !config.secrets_loaded_from.length) {
     problems.push(
@@ -40,13 +41,24 @@ function renderConfigWarning() {
     );
   }
   if (!config.llm_configured) {
-    problems.push("OPENAI_API_KEY missing - scoring and document generation will fail.");
+    problems.push(
+      `LLM not configured (missing: ${(missing.llm || []).join(", ")}) - scoring and document generation will fail.`
+    );
   }
   if (!config.sheets_configured) {
-    problems.push("GOOGLE_APPLICATION_CREDENTIALS missing - Google Sheet writes will fail.");
+    problems.push(
+      `Google Sheets not configured (missing: ${(missing.sheets || []).join(", ")}) - sheet writes will fail.`
+    );
   }
   if (!config.telegram_configured) {
-    problems.push("TELEGRAM_BOT / TELEGRAM_CHAT_ID missing - run summaries will not be sent.");
+    problems.push(
+      `Telegram not configured (missing: ${(missing.telegram || []).join(", ")}) - run summaries will not be sent.`
+    );
+  }
+  if (config.auth_mode === "dev") {
+    problems.push(
+      "Auth is in dev mode (Cloudflare Access not configured) - do not expose this app beyond your LAN."
+    );
   }
   const el = $("#config-warning");
   if (!problems.length) {

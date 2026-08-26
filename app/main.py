@@ -50,6 +50,7 @@ def get_config(user: dict = Depends(get_current_user)):
         "telegram_configured": settings.telegram_configured,
         "sheets_configured": settings.sheets_configured,
         "secrets_loaded_from": settings.secrets_loaded_from,
+        "missing_keys": settings.missing_keys,
         "default_assessment_prompt": llm.load_default_assessment_prompt(),
         "defaults": {
             "keywords": settings.DEFAULT_KEYWORDS,

@@ -1,6 +1,6 @@
 # Job Hunt App
 
-Version: 0.1.1 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.1.2 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -52,6 +52,7 @@ read inside the container, any file paths in it must be container paths
 Create a bot via @BotFather to get TELEGRAM_BOT. Send the bot any message,
 then read your chat id from:
     https://api.telegram.org/bot<TELEGRAM_BOT>/getUpdates
+BOTH TELEGRAM_BOT and TELEGRAM_CHAT_ID must be set for notifications to work.
 
 ### 4. Cloudflare Access (Google IdP)
 1. Cloudflare Zero Trust -> Settings -> Authentication -> add Google as a
@@ -75,7 +76,7 @@ App listens on port 8503. Volumes:
 
 ## Troubleshooting
 
-### "OPENAI_API_KEY is not configured" (or the UI warning banner)
+### "X is not configured" (or the UI warning banner)
 The app reads .venv/.secrets once at process start. Check, on psth1:
 1. The file exists next to docker-compose.yml:
        ls -la .venv/.secrets
@@ -91,8 +92,20 @@ The app reads .venv/.secrets once at process start. Check, on psth1:
        docker compose restart
 4. Confirm what the app actually loaded (values are never logged):
        docker logs jobhunt | grep -i -E "secrets|config status"
-The UI also shows a warning banner listing exactly which integrations
-(LLM / Sheets / Telegram) are not configured.
+   The status line names the exact missing keys, e.g.:
+       telegram=False (missing: TELEGRAM_CHAT_ID)
+The UI also shows a warning banner listing exactly which keys are missing
+per integration (LLM / Sheets / Telegram).
+
+### telegram=False despite Telegram settings in .secrets
+Both TELEGRAM_BOT and TELEGRAM_CHAT_ID must be set and non-empty. Check:
+- Key names are exactly TELEGRAM_BOT and TELEGRAM_CHAT_ID
+  (not TELEGRAM_BOT_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHATID, ...).
+- Lines are KEY=VALUE format (a line without "=" parses as empty).
+- No earlier empty duplicate line (the first occurrence wins).
+- The container was restarted after the edit.
+List the key names in your file without exposing any values:
+    cut -d= -f1 .venv/.secrets
 
 ## Notes & limitations
 - The assessment prompt template may use {resume} and {job_description}

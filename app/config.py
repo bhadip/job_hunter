@@ -40,9 +40,17 @@ def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
 
+def _missing(*keys: str) -> list:
+    """Names of the given env keys that are unset or empty.
+
+    Only key NAMES are ever reported - values are never logged or exposed.
+    """
+    return [k for k in keys if not _env(k)]
+
+
 def _read_version() -> str:
     version_file = BASE_DIR / "VERSION"
-    return version_file.read_text().strip() if version_file.exists() else "0.1.1"
+    return version_file.read_text().strip() if version_file.exists() else "0.1.2"
 
 
 class Settings:
@@ -117,13 +125,40 @@ class Settings:
     def sheets_configured(self) -> bool:
         return bool(self.GOOGLE_APPLICATION_CREDENTIALS)
 
+    @property
+    def missing_keys(self) -> dict:
+        """Per-integration list of unset/empty env key names (never values)."""
+        return {
+            "llm": _missing("OPENAI_API_KEY"),
+            "sheets": _missing("GOOGLE_APPLICATION_CREDENTIALS"),
+            "telegram": _missing("TELEGRAM_BOT", "TELEGRAM_CHAT_ID"),
+            "cloudflare": _missing("CF_TEAM_DOMAIN", "CF_ACCESS_AUD"),
+        }
+
 
 settings = Settings()
 settings.ensure_dirs()
+
+
+def _fmt_status(name: str, missing: list) -> str:
+    if not missing:
+        return f"{name}=True"
+    return f"{name}=False (missing: {', '.join(missing)})"
+
+
+_missing_map = settings.missing_keys
+if settings.cloudflare_enabled:
+    _cf_status = "cloudflare=True"
+elif len(_missing_map["cloudflare"]) == 2:
+    _cf_status = "cloudflare=dev-mode (CF_TEAM_DOMAIN/CF_ACCESS_AUD unset)"
+else:
+    # Only one of the two CF vars set - a broken half-configuration.
+    _cf_status = _fmt_status("cloudflare", _missing_map["cloudflare"])
+
 log.info(
-    "Config status: llm=%s sheets=%s telegram=%s cloudflare=%s",
-    settings.llm_configured,
-    settings.sheets_configured,
-    settings.telegram_configured,
-    settings.cloudflare_enabled,
+    "Config status: %s | %s | %s | %s",
+    _fmt_status("llm", _missing_map["llm"]),
+    _fmt_status("sheets", _missing_map["sheets"]),
+    _fmt_status("telegram", _missing_map["telegram"]),
+    _cf_status,
 )

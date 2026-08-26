@@ -1,6 +1,6 @@
 # Job Hunter
 
-Version: 0.2.0 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.2.1 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -204,6 +204,8 @@ List the key names in your file without exposing any values:
   placeholders. A mandatory JSON-output instruction (keys: score,
   skill_gaps, tailored_bullets) is appended automatically at runtime, so
   custom templates do not need to specify an output format.
+- The Distance filter is entered in kilometres in the UI; the app converts
+  to miles for LinkedIn's guest API, which only accepts miles.
 - PDF output uses built-in fonts; non-latin characters are transliterated.
   docx and md preserve full unicode.
 - LinkedIn's guest endpoint is unofficial and rate-limited; the scraper is

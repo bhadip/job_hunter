@@ -155,7 +155,7 @@ def get_config(user: dict = Depends(get_current_user)):
             "easy_apply": True,
             "employment_types": settings.DEFAULT_EMPLOYMENT_TYPES,
             "experience_levels": settings.DEFAULT_EXPERIENCE_LEVELS,
-            "distance_miles": None,
+            "distance_km": None,
             "under_10_applicants": False,
             "score_threshold": settings.SCORE_THRESHOLD,
             "formats": settings.DEFAULT_FORMATS,

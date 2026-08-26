@@ -19,7 +19,7 @@ def _describe_params(params) -> str:
             f"EasyApply={params.easy_apply}",
             f"EmploymentTypes={params.employment_types or 'Any'}",
             f"ExperienceLevels={params.experience_levels or 'Any'}",
-            f"DistanceMiles={params.distance_miles or 'Any'}",
+            f"DistanceKm={params.distance_km or 'Any'}",
             f"Under10Applicants={params.under_10_applicants}",
             f"ScoreThreshold={params.score_threshold}",
             f"Formats={params.formats}",

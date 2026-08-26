@@ -94,7 +94,7 @@ function collectParams() {
     easy_apply: $("#f-easy-apply").checked,
     employment_types: checkedValues("f-emp"),
     experience_levels: checkedValues("f-exp"),
-    distance_miles: $("#f-distance").value ? parseInt($("#f-distance").value, 10) : null,
+    distance_km: $("#f-distance").value ? parseInt($("#f-distance").value, 10) : null,
     under_10_applicants: $("#f-under10").checked,
     score_threshold: parseInt($("#f-threshold").value, 10) || 65,
     formats: checkedValues("f-format"),
@@ -108,7 +108,7 @@ function fillForm(p) {
   $("#f-location").value = p.location || "";
   $("#f-offsets").value = (p.offsets || [0]).join(",");
   $("#f-limit").value = p.limit || 50;
-  $("#f-distance").value = p.distance_miles || "";
+  $("#f-distance").value = p.distance_km || "";
   $("#f-easy-apply").checked = !!p.easy_apply;
   $("#f-under10").checked = !!p.under_10_applicants;
   $("#f-threshold").value = p.score_threshold || 65;

@@ -47,8 +47,9 @@ def build_filter_params(params) -> dict:
     codes = [EXPERIENCE_LEVEL_CODES[e] for e in params.experience_levels if e in EXPERIENCE_LEVEL_CODES]
     if codes:
         out["f_E"] = ",".join(codes)
-    if params.distance_miles:
-        out["distance"] = str(params.distance_miles)
+    # LinkedIn's guest API only accepts distance in miles; the UI collects km.
+    if params.distance_km:
+        out["distance"] = str(max(1, round(params.distance_km * 0.621371)))
     return out
 
 

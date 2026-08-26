@@ -11,7 +11,7 @@ class RunRequest(BaseModel):
     easy_apply: bool = True
     employment_types: List[str] = Field(default_factory=list)
     experience_levels: List[str] = Field(default_factory=list)
-    distance_miles: Optional[int] = None
+    distance_km: Optional[int] = None
     under_10_applicants: bool = False
     score_threshold: int = 65
     formats: List[str] = Field(default_factory=lambda: ["docx", "md"])

@@ -1,6 +1,6 @@
 # Job Hunt App
 
-Version: 0.1.2 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.1.3 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -39,6 +39,7 @@ KEY=VALUE lines, e.g.:
     DEFAULT_JD_ASSESSMENT_PROMPT=/app/data/JD_Assessment_Prompt_Template.md
     CF_TEAM_DOMAIN=yourteam.cloudflareaccess.com
     CF_ACCESS_AUD=xxxxxxxx
+    CF_APP_URL=https://jobhunt.yourdomain.com
 See .env.example for the full list. Real environment variables override
 values from this file.
 
@@ -61,8 +62,16 @@ BOTH TELEGRAM_BOT and TELEGRAM_CHAT_ID must be set for notifications to work.
    hostname you expose for this app (e.g. via a Cloudflare Tunnel on psth1).
 3. Copy the team domain (Settings -> General, e.g. yourteam.cloudflareaccess.com)
    into CF_TEAM_DOMAIN and the application's AUD tag into CF_ACCESS_AUD.
+4. Optionally set CF_APP_URL to the app's public URL - it is shown as a
+   "continue" link on the page served to browsers that hit the app directly.
 If CF_TEAM_DOMAIN / CF_ACCESS_AUD are empty the app runs in dev mode with a
 single local user — do not expose it publicly in that state.
+
+IMPORTANT: once Cloudflare auth is enabled, the app is ONLY reachable via the
+Cloudflare-protected hostname. Cloudflare injects the identity token at its
+edge, so requests that bypass Cloudflare (e.g. http://<server-ip>:8503) carry
+no identity and are rejected with 401 - in every browser, incognito or not.
+This is intentional fail-closed behavior.
 
 ## Build & run (psth1)
 
@@ -75,6 +84,15 @@ App listens on port 8503. Volumes:
     ./.venv   -> read-only, only .secrets is read from it
 
 ## Troubleshooting
+
+### "Missing Cloudflare Access credentials" when opening the app
+You are opening the app by IP:port (e.g. http://192.168.50.2:8503), which
+bypasses Cloudflare entirely - no identity token exists on that path, so the
+app rejects the request. Open it via the Cloudflare-protected hostname from
+your Access application instead (e.g. https://jobhunt.yourdomain.com). This
+applies to all browsers; incognito vs regular makes no difference. If you
+want direct LAN access without auth, remove CF_TEAM_DOMAIN / CF_ACCESS_AUD
+from .venv/.secrets and restart (dev mode - LAN only).
 
 ### "X is not configured" (or the UI warning banner)
 The app reads .venv/.secrets once at process start. Check, on psth1:

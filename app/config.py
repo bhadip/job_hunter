@@ -50,7 +50,7 @@ def _missing(*keys: str) -> list:
 
 def _read_version() -> str:
     version_file = BASE_DIR / "VERSION"
-    return version_file.read_text().strip() if version_file.exists() else "0.1.2"
+    return version_file.read_text().strip() if version_file.exists() else "0.1.3"
 
 
 class Settings:
@@ -80,6 +80,9 @@ class Settings:
     # Cloudflare Access (Google IdP). Empty -> dev mode (single local user).
     CF_TEAM_DOMAIN = _env("CF_TEAM_DOMAIN")
     CF_ACCESS_AUD = _env("CF_ACCESS_AUD")
+    # Public URL of this app behind Access, e.g. https://jobhunt.example.com.
+    # Only used to render a "continue" link on the direct-access 401 page.
+    CF_APP_URL = _env("CF_APP_URL")
 
     SCORE_THRESHOLD = int(_env("SCORE_THRESHOLD", "65"))
 

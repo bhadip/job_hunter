@@ -1,0 +1,16 @@
+services:
+  jobhunt:
+    build: .
+    image: jobhunt:0.1.0
+    container_name: jobhunt
+    ports:
+      - "8503:8503"
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+      - ./.venv/.secrets:/app/.venv/.secrets:ro
+    environment:
+      # The .secrets file points at a host path; inside the container the
+      # service-account key lives at this fixed location instead.
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/data/credentials.json
+    restart: unless-stopped

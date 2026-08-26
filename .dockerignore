@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+.env
+data
+output
+__pycache__
+*.pyc
+*.pyo
+.aider*
+Dockerfile
+docker-compose.yml

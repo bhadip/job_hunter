@@ -1,14 +1,39 @@
+import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("jobhunt.config")
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+SECRETS_CANDIDATES = (BASE_DIR / ".venv" / ".secrets", BASE_DIR / ".env")
+
 # Load secrets: real environment variables always win (override=False).
-for candidate in (BASE_DIR / ".venv" / ".secrets", BASE_DIR / ".env"):
-    if candidate.exists():
+SECRETS_LOADED_FROM = []
+for candidate in SECRETS_CANDIDATES:
+    if candidate.is_file():
         load_dotenv(candidate, override=False)
+        SECRETS_LOADED_FROM.append(str(candidate))
+    elif candidate.exists():
+        # A directory here means Docker created it for a missing bind-mount
+        # source - dotenv cannot read it, so say so loudly.
+        log.warning(
+            "%s exists but is not a file (Docker created a directory for a "
+            "missing bind-mount source?). Secrets NOT loaded from it.",
+            candidate,
+        )
+
+if SECRETS_LOADED_FROM:
+    log.info("Secrets loaded from: %s", ", ".join(SECRETS_LOADED_FROM))
+else:
+    log.warning(
+        "No secrets file found. Looked for: %s. Create .venv/.secrets next to "
+        "docker-compose.yml on the host, then restart the container.",
+        ", ".join(str(c) for c in SECRETS_CANDIDATES),
+    )
 
 
 def _env(key: str, default: str = "") -> str:
@@ -17,7 +42,7 @@ def _env(key: str, default: str = "") -> str:
 
 def _read_version() -> str:
     version_file = BASE_DIR / "VERSION"
-    return version_file.read_text().strip() if version_file.exists() else "0.1.0"
+    return version_file.read_text().strip() if version_file.exists() else "0.1.1"
 
 
 class Settings:
@@ -73,6 +98,10 @@ class Settings:
         self.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     @property
+    def secrets_loaded_from(self) -> list:
+        return list(SECRETS_LOADED_FROM)
+
+    @property
     def cloudflare_enabled(self) -> bool:
         return bool(self.CF_TEAM_DOMAIN and self.CF_ACCESS_AUD)
 
@@ -91,3 +120,10 @@ class Settings:
 
 settings = Settings()
 settings.ensure_dirs()
+log.info(
+    "Config status: llm=%s sheets=%s telegram=%s cloudflare=%s",
+    settings.llm_configured,
+    settings.sheets_configured,
+    settings.telegram_configured,
+    settings.cloudflare_enabled,
+)

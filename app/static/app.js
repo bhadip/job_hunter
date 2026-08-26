@@ -31,6 +31,39 @@ $$(".tab").forEach((btn) =>
   })
 );
 
+/* ---------- config warning banner ---------- */
+function renderConfigWarning() {
+  const problems = [];
+  if (!config.secrets_loaded_from || !config.secrets_loaded_from.length) {
+    problems.push(
+      "No secrets file was loaded by the server (expected .venv/.secrets next to docker-compose.yml on the host)."
+    );
+  }
+  if (!config.llm_configured) {
+    problems.push("OPENAI_API_KEY missing - scoring and document generation will fail.");
+  }
+  if (!config.sheets_configured) {
+    problems.push("GOOGLE_APPLICATION_CREDENTIALS missing - Google Sheet writes will fail.");
+  }
+  if (!config.telegram_configured) {
+    problems.push("TELEGRAM_BOT / TELEGRAM_CHAT_ID missing - run summaries will not be sent.");
+  }
+  const el = $("#config-warning");
+  if (!problems.length) {
+    el.style.display = "none";
+    return;
+  }
+  el.innerHTML =
+    "<b>Configuration issues detected:</b><ul>" +
+    problems.map((p) => `<li>${p}</li>`).join("") +
+    "</ul>Fix <code>.venv/.secrets</code> on the server, then run " +
+    "<code>docker compose restart</code>. Loaded from: " +
+    (config.secrets_loaded_from && config.secrets_loaded_from.length
+      ? config.secrets_loaded_from.join(", ")
+      : "nothing");
+  el.style.display = "block";
+}
+
 /* ---------- form helpers ---------- */
 function checkedValues(cls) {
   return $$("." + cls).filter((c) => c.checked).map((c) => c.value);
@@ -214,6 +247,7 @@ $("#btn-save-profile").addEventListener("click", async () => {
   $("#version").textContent = "v" + config.version;
   $("#user-email").textContent = me.email;
   $("#auth-mode").textContent = config.auth_mode === "cloudflare" ? "Cloudflare Access" : "dev mode";
+  renderConfigWarning();
 
   let defaults = config.defaults;
   if (me.default_params) {

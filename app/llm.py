@@ -1,9 +1,12 @@
 import json
+import logging
 import time
 
 from openai import APIConnectionError, APIError, OpenAI, RateLimitError
 
 from .config import settings
+
+log = logging.getLogger("jobhunt.llm")
 
 MAX_JD_CHARS = 12000  # token-cost guard for scoring
 
@@ -91,8 +94,13 @@ def load_default_assessment_prompt() -> str:
                 content = fh.read().strip()
                 if content:
                     return content
-        except OSError:
-            pass
+            log.warning("Assessment prompt file %s is empty; using built-in default.", path)
+        except OSError as exc:
+            log.warning(
+                "Cannot read assessment prompt file %s (%s); using built-in default. "
+                "Note: inside Docker the path must be a container path, e.g. /app/data/...",
+                path, exc,
+            )
     return BUILTIN_ASSESSMENT_PROMPT
 
 

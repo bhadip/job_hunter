@@ -15,6 +15,11 @@ from .models import ProfileUpdate, RunRequest
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
+SECRETS_HINT = (
+    "On the server, create .venv/.secrets next to docker-compose.yml "
+    "(it is gitignored, so git does not copy it), then run: docker compose restart"
+)
+
 app = FastAPI(title="Job Hunt App", version=settings.VERSION)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -44,6 +49,7 @@ def get_config(user: dict = Depends(get_current_user)):
         "llm_configured": settings.llm_configured,
         "telegram_configured": settings.telegram_configured,
         "sheets_configured": settings.sheets_configured,
+        "secrets_loaded_from": settings.secrets_loaded_from,
         "default_assessment_prompt": llm.load_default_assessment_prompt(),
         "defaults": {
             "keywords": settings.DEFAULT_KEYWORDS,
@@ -78,18 +84,21 @@ def start_run(params: RunRequest, user: dict = Depends(get_current_user)):
     if not params.keywords:
         raise HTTPException(status_code=400, detail="At least one keyword is required.")
     if not settings.llm_configured:
-        raise HTTPException(status_code=400, detail="OPENAI_API_KEY is not configured.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"OPENAI_API_KEY is not configured. {SECRETS_HINT}",
+        )
     if not settings.sheets_configured:
-        raise HTTPException(status_code=400, detail="GOOGLE_APPLICATION_CREDENTIALS is not configured.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"GOOGLE_APPLICATION_CREDENTIALS is not configured. {SECRETS_HINT}",
+        )
     if not (user.get("master_resume") or "").strip():
         raise HTTPException(
             status_code=400,
             detail="No master resume on your profile. Save one in the Profile tab first.",
         )
     run_id = db.create_run(user["email"], params.dict())
-
-    def target(state):
-        pipeline.execute(run_id, params, user, job_manager.emit.__get__(job_manager), state.cancel)
 
     def emit_wrapper(msg, stage=None):
         job_manager.emit(run_id, msg, stage=stage)

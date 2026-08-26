@@ -1,6 +1,6 @@
 # Job Hunt App
 
-Version: 0.1.0 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.1.1 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -36,11 +36,17 @@ KEY=VALUE lines, e.g.:
     OPENAI_ENDPOINT=https://api.openai.com/v1
     TELEGRAM_BOT=123456:ABC-...
     TELEGRAM_CHAT_ID=123456789
-    DEFAULT_JD_ASSESSMENT_PROMPT=/path/to/JD_Assessment_Prompt_Template.md
+    DEFAULT_JD_ASSESSMENT_PROMPT=/app/data/JD_Assessment_Prompt_Template.md
     CF_TEAM_DOMAIN=yourteam.cloudflareaccess.com
     CF_ACCESS_AUD=xxxxxxxx
 See .env.example for the full list. Real environment variables override
 values from this file.
+
+IMPORTANT: .venv/ is gitignored, so this file is NOT copied by git
+clone/pull. You must create it by hand on every machine that runs the app
+(including psth1), next to docker-compose.yml. Because the file is only
+read inside the container, any file paths in it must be container paths
+(e.g. put the prompt template in ./data/ and reference /app/data/...).
 
 ### 3. Telegram
 Create a bot via @BotFather to get TELEGRAM_BOT. Send the bot any message,
@@ -65,6 +71,28 @@ single local user — do not expose it publicly in that state.
 App listens on port 8503. Volumes:
     ./data    -> SQLite DB, credentials.json
     ./output  -> generated resumes & cover letters (per user / per run)
+    ./.venv   -> read-only, only .secrets is read from it
+
+## Troubleshooting
+
+### "OPENAI_API_KEY is not configured" (or the UI warning banner)
+The app reads .venv/.secrets once at process start. Check, on psth1:
+1. The file exists next to docker-compose.yml:
+       ls -la .venv/.secrets
+   (.venv/ is gitignored - it is never copied by git clone/pull.)
+2. It is a FILE, not a directory. If Docker created a directory named
+   .secrets (happens when a bind-mount source is missing at first start),
+   remove it and recreate the container:
+       docker compose down
+       rmdir .venv/.secrets        # only if it is an empty directory
+       nano .venv/.secrets         # create the real file
+       docker compose up -d
+3. Restart after any edit to .secrets:
+       docker compose restart
+4. Confirm what the app actually loaded (values are never logged):
+       docker logs jobhunt | grep -i -E "secrets|config status"
+The UI also shows a warning banner listing exactly which integrations
+(LLM / Sheets / Telegram) are not configured.
 
 ## Notes & limitations
 - The assessment prompt template may use {resume} and {job_description}

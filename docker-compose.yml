@@ -1,14 +1,18 @@
 services:
   jobhunt:
     build: .
-    image: jobhunt:0.1.0
+    image: jobhunt:0.1.1
     container_name: jobhunt
     ports:
       - "8503:8503"
     volumes:
       - ./data:/app/data
       - ./output:/app/output
-      - ./.venv/.secrets:/app/.venv/.secrets:ro
+      # Mount the whole directory, not the single file: if ./.venv is missing
+      # on the host, Docker creates an empty directory and you can simply drop
+      # .secrets into it later + restart. A single-file mount that starts out
+      # missing becomes a permanent empty directory that shadows the file.
+      - ./.venv:/app/.venv:ro
     environment:
       # The .secrets file points at a host path; inside the container the
       # service-account key lives at this fixed location instead.

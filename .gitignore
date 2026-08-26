@@ -1,6 +1,4 @@
 .aider*
-GOOGLE_APPLICATION_CREDENTIALS="/config/workspace/aider-test/job-hunter-506703-663526d71a13.json"
-DEFAULT_ASSESSMENT_PROMPT="/config/workspace/aider-test/JD_Assessment_Prompt_Template.md"
 
 # --- Job Hunt app ---
 .env

@@ -1,6 +1,6 @@
 # Job Hunt App
 
-Version: 0.1.4 (see VERSION; scheme is major.minor.bugfix — minor bumps for
+Version: 0.1.5 (see VERSION; scheme is major.minor.bugfix — minor bumps for
 new features, bugfix bumps for fixes, major stays 0 until you say otherwise).
 
 Web app that replaces the Colab workflow:
@@ -29,6 +29,13 @@ saved search defaults, and run history.
 4. Share the "Job_Applications_v3" sheet with the service account's
    client_email as Editor. Afterwards you can switch the sheet's link
    sharing back to "Restricted" so only you and the app can access it.
+
+IMPORTANT: the credentials file must live at ./data/credentials.json on the
+host. The container only mounts ./data, ./output and ./.venv - a key placed
+anywhere else (e.g. the repo root) is invisible inside the container. Also,
+docker-compose sets GOOGLE_APPLICATION_CREDENTIALS=/app/data/credentials.json
+as a container env var, which OVERRIDES any value in .venv/.secrets - so do
+not rely on .secrets to point at the key; just put the file at ./data/.
 
 ### 2. Secrets file (.venv/.secrets)
 KEY=VALUE lines, e.g.:
@@ -88,6 +95,19 @@ App listens on port 8503. Volumes:
     ./.venv   -> read-only, only .secrets is read from it
 
 ## Troubleshooting
+
+### "Google credentials file not found" / Errno 2 on credentials.json
+The app reads the service-account key inside the container at
+/app/data/credentials.json. Fix:
+1. Copy the key into the mounted data dir on the host:
+       cp /path/to/your-key.json ./data/credentials.json
+2. Restart:
+       docker compose restart
+Confirm at startup:
+       docker logs jobhunt | grep -i "sheets-creds-file"
+   -> should print "sheets-creds-file=OK".
+Note: docker-compose hard-sets GOOGLE_APPLICATION_CREDENTIALS to that
+container path, overriding any host path in .venv/.secrets.
 
 ### "Missing Cloudflare Access credentials" (401) when opening the app
 You are opening the app by IP:port (e.g. http://192.168.50.2:8503), which

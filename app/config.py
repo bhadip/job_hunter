@@ -50,7 +50,7 @@ def _missing(*keys: str) -> list:
 
 def _read_version() -> str:
     version_file = BASE_DIR / "VERSION"
-    return version_file.read_text().strip() if version_file.exists() else "0.1.3"
+    return version_file.read_text().strip() if version_file.exists() else "0.1.5"
 
 
 class Settings:
@@ -129,6 +129,13 @@ class Settings:
         return bool(self.GOOGLE_APPLICATION_CREDENTIALS)
 
     @property
+    def sheets_credentials_file_exists(self) -> bool:
+        """Whether the service-account JSON file is actually present."""
+        if not self.GOOGLE_APPLICATION_CREDENTIALS:
+            return False
+        return Path(self.GOOGLE_APPLICATION_CREDENTIALS).is_file()
+
+    @property
     def missing_keys(self) -> dict:
         """Per-integration list of unset/empty env key names (never values)."""
         return {
@@ -165,3 +172,16 @@ log.info(
     _fmt_status("telegram", _missing_map["telegram"]),
     _cf_status,
 )
+
+# The credentials env var can be set while the file itself is absent (e.g. the
+# host path was never copied into ./data). Surface that distinctly.
+if settings.sheets_configured:
+    if settings.sheets_credentials_file_exists:
+        log.info("Config status: sheets-creds-file=OK (%s)", settings.GOOGLE_APPLICATION_CREDENTIALS)
+    else:
+        log.warning(
+            "Config status: sheets-creds-file=MISSING (%s). Place the service-account "
+            "JSON key at ./data/credentials.json on the host (it is mounted to /app/data) "
+            "and restart.",
+            settings.GOOGLE_APPLICATION_CREDENTIALS,
+        )

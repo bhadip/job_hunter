@@ -3,6 +3,7 @@ import io
 import json
 import zipfile
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
@@ -106,7 +107,8 @@ def _invalid_token_page(detail: str) -> str:
 
 
 def _logout_url():
-    """Cloudflare Access logout URL, or None in dev mode."""
+    """Cloudflare Access logout URL with redirect back to the app (which
+    triggers a fresh login), or None in dev mode."""
     if not settings.cloudflare_enabled:
         return None
     team = (settings.CF_TEAM_DOMAIN or "").strip()
@@ -114,7 +116,11 @@ def _logout_url():
         return None
     if not team.startswith("http"):
         team = "https://" + team
-    return team.rstrip("/") + "/cdn-cgi/access/logout"
+    url = team.rstrip("/") + "/cdn-cgi/access/logout"
+    app_url = (settings.CF_APP_URL or "").strip()
+    if app_url:
+        url += "?redirect=" + quote(app_url, safe="")
+    return url
 
 
 @app.exception_handler(HTTPException)

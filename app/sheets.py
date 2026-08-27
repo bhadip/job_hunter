@@ -26,16 +26,27 @@ COL_POSTED = "O:O"   # Posted Date column
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
+def _is_retryable(exc: Exception) -> bool:
+    """True if the exception looks like a transient Google API error.
+    Handles gspread APIError as well as lower-level errors (requests/httplib2)
+    whose message embeds the HTTP status code."""
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status in _RETRYABLE_STATUS:
+        return True
+    msg = str(exc)
+    return any(f"[{code}]" in msg or f" {code} " in msg or f": {code}" in msg
+               for code in _RETRYABLE_STATUS)
+
+
 def write_with_backoff(func, *args, max_attempts=5, base_delay=20, log=print, **kwargs):
     for attempt in range(1, max_attempts + 1):
         try:
             return func(*args, **kwargs)
-        except gspread.exceptions.APIError as exc:
-            status = getattr(getattr(exc, "response", None), "status_code", None)
-            if status in _RETRYABLE_STATUS and attempt < max_attempts:
+        except Exception as exc:
+            if _is_retryable(exc) and attempt < max_attempts:
                 delay = base_delay * attempt
                 log(
-                    f"[SHEETS] HTTP {status}, attempt {attempt}/{max_attempts}. "
+                    f"[SHEETS] Transient error ({exc}), attempt {attempt}/{max_attempts}. "
                     f"Retrying in {delay}s..."
                 )
                 time.sleep(delay)
@@ -80,9 +91,9 @@ class SheetWriter:
             settings.resolved_google_credentials, scopes=SCOPES
         )
         gc = gspread.authorize(creds)
-        self.sh = gc.open_by_key(settings.GOOGLE_SHEET_ID)
-        self.ws = self._get_or_create(db_tab_name(user_email), HEADERS)
-        self.log_ws = self._get_or_create(log_tab_name(user_email), LOG_HEADERS)
+        self.sh = write_with_backoff(gc.open_by_key, settings.GOOGLE_SHEET_ID, log=log)
+        self.ws = write_with_backoff(self._get_or_create, db_tab_name(user_email), HEADERS, log=log)
+        self.log_ws = write_with_backoff(self._get_or_create, log_tab_name(user_email), LOG_HEADERS, log=log)
 
     def _get_or_create(self, title: str, headers: list):
         try:
@@ -94,7 +105,7 @@ class SheetWriter:
             return ws
 
     def existing_urls(self) -> set:
-        return set(self.ws.col_values(COL_URL))
+        return set(write_with_backoff(self.ws.col_values, COL_URL, log=self.log))
 
     def append_jobs(self, rows: list):
         """Append rows (lists of 17 values). Returns (start_row, end_row)."""

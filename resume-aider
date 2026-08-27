@@ -1,0 +1,3 @@
+cd ~/workspace/aider-test
+source .venv/bin/activate
+aider --dark-mode --subtree-only --model openai/kimi-k3

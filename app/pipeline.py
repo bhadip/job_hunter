@@ -106,7 +106,7 @@ def execute(run_id: int, params, user: dict, emit, cancel_event):
             "Copy your key into ./data - any .json filename works - then run "
             "'docker compose restart'."
         )
-    writer = sheets.SheetWriter(log=log)
+    writer = sheets.SheetWriter(user["email"], log=log)
     existing = writer.existing_urls()
     new_jobs, seen = [], set()
     for job in found:

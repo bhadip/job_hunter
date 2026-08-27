@@ -1,8 +1,10 @@
 import asyncio
+import io
 import json
+import zipfile
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -103,6 +105,18 @@ def _invalid_token_page(detail: str) -> str:
     return _page("Cloudflare Access token rejected", body, detail)
 
 
+def _logout_url():
+    """Cloudflare Access logout URL, or None in dev mode."""
+    if not settings.cloudflare_enabled:
+        return None
+    team = (settings.CF_TEAM_DOMAIN or "").strip()
+    if not team:
+        return None
+    if not team.startswith("http"):
+        team = "https://" + team
+    return team.rstrip("/") + "/cdn-cgi/access/logout"
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Browsers hitting auth errors get a friendly HTML page; API calls get JSON."""
@@ -141,6 +155,7 @@ def get_config(user: dict = Depends(get_current_user)):
         "sheet_id": settings.GOOGLE_SHEET_ID,
         "sheet_name": settings.GOOGLE_SHEET_NAME,
         "auth_mode": "cloudflare" if settings.cloudflare_enabled else "dev",
+        "logout_url": _logout_url(),
         "llm_configured": settings.llm_configured,
         "telegram_configured": settings.telegram_configured,
         "sheets_configured": settings.sheets_configured,
@@ -206,6 +221,13 @@ def start_run(params: RunRequest, user: dict = Depends(get_current_user)):
     return {"run_id": run_id}
 
 
+def _get_owned_run(run_id: int, user: dict) -> dict:
+    run = db.get_run(run_id)
+    if not run or run["user_email"] != user["email"]:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run
+
+
 @app.get("/api/runs")
 def list_runs(user: dict = Depends(get_current_user)):
     return db.list_runs(user["email"])
@@ -213,21 +235,106 @@ def list_runs(user: dict = Depends(get_current_user)):
 
 @app.get("/api/runs/{run_id}")
 def get_run(run_id: int, user: dict = Depends(get_current_user)):
-    run = db.get_run(run_id)
-    if not run or run["user_email"] != user["email"]:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _get_owned_run(run_id, user)
     run["jobs"] = db.list_jobs(run_id)
     return run
 
 
 @app.post("/api/runs/{run_id}/cancel")
 def cancel_run(run_id: int, user: dict = Depends(get_current_user)):
-    run = db.get_run(run_id)
-    if not run or run["user_email"] != user["email"]:
-        raise HTTPException(status_code=404, detail="Run not found")
+    _get_owned_run(run_id, user)
     if not job_manager.cancel(run_id):
         raise HTTPException(status_code=400, detail="Run is not active")
     return {"status": "cancelling"}
+
+
+# ---------- generated file downloads ----------
+
+def _user_output_dir(email: str) -> Path:
+    """Resolved output dir for a user, guaranteed to stay under OUTPUT_DIR."""
+    root = Path(settings.OUTPUT_DIR).resolve()
+    user_dir = (root / email).resolve()
+    try:
+        user_dir.relative_to(root)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid output directory")
+    return user_dir
+
+
+def _resolve_user_file(path_str: str, user_dir: Path) -> Path:
+    """Resolve a stored path and verify it lives inside the user's output dir."""
+    p = Path(path_str).resolve()
+    try:
+        p.relative_to(user_dir)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="File is outside your output directory")
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    return p
+
+
+def _job_file_paths(job: dict, kind: str) -> list:
+    raw = job.get("resume_path" if kind == "resume" else "cover_letter_path") or ""
+    return [p.strip() for p in raw.splitlines() if p.strip()]
+
+
+@app.get("/api/runs/{run_id}/jobs/{job_id}/download")
+def download_job_file(
+    run_id: int,
+    job_id: int,
+    kind: str = "resume",
+    fmt: str = "",
+    user: dict = Depends(get_current_user),
+):
+    _get_owned_run(run_id, user)
+    if kind not in ("resume", "cover"):
+        raise HTTPException(status_code=400, detail="kind must be 'resume' or 'cover'")
+    job = next((j for j in db.list_jobs(run_id) if j.get("id") == job_id), None)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    paths = _job_file_paths(job, kind)
+    if not paths:
+        raise HTTPException(status_code=404, detail=f"No {kind} files for this job")
+    if fmt:
+        chosen = next((p for p in paths if p.lower().endswith("." + fmt.lower())), None)
+        if not chosen:
+            raise HTTPException(status_code=404, detail=f"No {kind} file with format '{fmt}'")
+    else:
+        chosen = paths[0]
+    file_path = _resolve_user_file(chosen, _user_output_dir(user["email"]))
+    return FileResponse(file_path, filename=file_path.name)
+
+
+@app.get("/api/runs/{run_id}/download")
+def download_run_zip(run_id: int, user: dict = Depends(get_current_user)):
+    """Zip all generated files for a run. Built in memory on demand - the zip
+    itself is never written to disk."""
+    _get_owned_run(run_id, user)
+    user_dir = _user_output_dir(user["email"])
+    buf = io.BytesIO()
+    count = 0
+    seen_arcnames = set()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for job in db.list_jobs(run_id):
+            for kind in ("resume", "cover"):
+                for p in _job_file_paths(job, kind):
+                    try:
+                        file_path = _resolve_user_file(p, user_dir)
+                    except HTTPException:
+                        continue  # skip missing/moved files
+                    arcname = str(file_path.relative_to(user_dir))
+                    if arcname in seen_arcnames:
+                        continue
+                    seen_arcnames.add(arcname)
+                    zf.write(file_path, arcname)
+                    count += 1
+    if not count:
+        raise HTTPException(status_code=404, detail="No generated files found for this run")
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="run_{run_id}_documents.zip"'},
+    )
 
 
 @app.get("/api/runs/{run_id}/events")

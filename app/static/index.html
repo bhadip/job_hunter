@@ -12,6 +12,7 @@
     <div class="user-box">
       <span id="user-email"></span>
       <span id="auth-mode" class="badge"></span>
+      <button id="btn-logout" style="display:none">Log out</button>
     </div>
   </header>
 
@@ -112,9 +113,12 @@
         <div class="pane pane-right">
           <div class="card" id="run-detail">
             <h2>Run detail <span id="detail-run-id"></span></h2>
+            <div class="actions">
+              <button id="btn-download-run" style="display:none">Download all (zip)</button>
+            </div>
             <table id="jobs-table">
               <thead>
-                <tr><th>Score</th><th>Company</th><th>Position</th><th>Status</th><th>Link</th></tr>
+                <tr><th>Score</th><th>Company</th><th>Position</th><th>Status</th><th>Files</th><th>Link</th></tr>
               </thead>
               <tbody></tbody>
             </table>

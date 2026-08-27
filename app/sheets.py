@@ -11,7 +11,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-# Database tab layout (A..Q)
+# Per-user database tab layout (A..Q)
 HEADERS = [
     "Company", "Position", "Location", "Source", "Job URL", "Job Description",
     "Age", "Score", "Skill Gaps", "Tailored Bullets", "Resume", "Cover Letter",
@@ -61,22 +61,37 @@ def dupe_formula(row: int) -> str:
     )
 
 
+def db_tab_name(user_email: str) -> str:
+    return f"DB-{user_email}"
+
+
+def log_tab_name(user_email: str) -> str:
+    return f"Job Searching Logs-{user_email}"
+
+
 class SheetWriter:
-    def __init__(self, log=print):
+    """Writes to per-user tabs: DB-<email> and Job Searching Logs-<email>.
+    Both tabs are created (with headers) on first use."""
+
+    def __init__(self, user_email: str, log=print):
         self.log = log
+        self.user_email = user_email
         creds = Credentials.from_service_account_file(
             settings.resolved_google_credentials, scopes=SCOPES
         )
         gc = gspread.authorize(creds)
         self.sh = gc.open_by_key(settings.GOOGLE_SHEET_ID)
-        self.ws = self.sh.worksheet("Database")
+        self.ws = self._get_or_create(db_tab_name(user_email), HEADERS)
+        self.log_ws = self._get_or_create(log_tab_name(user_email), LOG_HEADERS)
+
+    def _get_or_create(self, title: str, headers: list):
         try:
-            self.log_ws = self.sh.worksheet("Job Searching Logs")
+            return self.sh.worksheet(title)
         except gspread.exceptions.WorksheetNotFound:
-            self.log_ws = self.sh.add_worksheet(
-                title="Job Searching Logs", rows=1000, cols=len(LOG_HEADERS)
-            )
-            self.log_ws.append_row(LOG_HEADERS)
+            self.log(f"[SHEETS] Creating missing tab '{title}'.")
+            ws = self.sh.add_worksheet(title=title, rows=1000, cols=len(headers))
+            ws.append_row(headers)
+            return ws
 
     def existing_urls(self) -> set:
         return set(self.ws.col_values(COL_URL))

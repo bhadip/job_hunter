@@ -6,6 +6,7 @@ let config = null;
 let me = null;
 let eventSource = null;
 let statusPoll = null;
+let detailRunId = null;
 
 async function api(path, options = {}) {
   const resp = await fetch(path, {
@@ -241,8 +242,24 @@ async function loadHistory() {
   );
 }
 
+function fileLinks(runId, job) {
+  const links = [];
+  const add = (kind, label, raw) => {
+    (raw || "").split("\n").map((s) => s.trim()).filter(Boolean).forEach((p) => {
+      const fmt = p.split(".").pop();
+      links.push(
+        `<a href="/api/runs/${runId}/jobs/${job.id}/download?kind=${kind}&fmt=${fmt}">${label}.${fmt}</a>`
+      );
+    });
+  };
+  add("resume", "resume", job.resume_path);
+  add("cover", "cover", job.cover_letter_path);
+  return links.join(" ");
+}
+
 async function loadRunDetail(runId) {
   const run = await api(`/api/runs/${runId}`);
+  detailRunId = runId;
   $("#detail-run-id").textContent = "#" + runId;
   const tbody = $("#jobs-table tbody");
   tbody.innerHTML = "";
@@ -253,10 +270,21 @@ async function loadRunDetail(runId) {
       `<td>${job.company || ""}</td>` +
       `<td>${job.position || ""}</td>` +
       `<td>${job.status || ""}</td>` +
+      `<td>${fileLinks(runId, job)}</td>` +
       `<td><a href="${job.url}" target="_blank" rel="noopener">open</a></td>`;
     tbody.appendChild(tr);
   });
+  const hasFiles = (run.jobs || []).some(
+    (j) => (j.resume_path || "").trim() || (j.cover_letter_path || "").trim()
+  );
+  $("#btn-download-run").style.display = hasFiles ? "inline-block" : "none";
 }
+
+$("#btn-download-run").addEventListener("click", () => {
+  if (detailRunId) {
+    window.location.href = `/api/runs/${detailRunId}/download`;
+  }
+});
 
 /* ---------- profile ---------- */
 async function loadProfile() {
@@ -293,6 +321,12 @@ $("#btn-save-profile").addEventListener("click", async () => {
   $("#user-email").textContent = me.email;
   $("#auth-mode").textContent = config.auth_mode === "cloudflare" ? "Cloudflare Access" : "dev mode";
   renderConfigWarning();
+
+  if (config.logout_url) {
+    const btn = $("#btn-logout");
+    btn.style.display = "inline-block";
+    btn.addEventListener("click", () => { window.location.href = config.logout_url; });
+  }
 
   let defaults = config.defaults;
   if (me.default_params) {

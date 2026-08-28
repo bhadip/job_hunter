@@ -145,7 +145,10 @@ def add_job(run_id: int, user_email: str, job: dict) -> int:
                 status, sheet_row, created_at)
                VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (
-                run_id, user_email, job.get("url"), job.get("company"), job.get("position"),
+                run_id, user_email, job.get("url"), job.get("company"),
+                # Scraper/pipeline job dicts carry the title under "title";
+                # accept "position" too so the column is never stored NULL.
+                job.get("position") or job.get("title"),
                 job.get("location"), job.get("posted_date"), job.get("status", "Scraped"),
                 job.get("sheet_row"), _now(),
             ),

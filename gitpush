@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Usage: gitpush "your commit message"
+# Stages everything, commits with the given message, and pushes.
+set -e
+
+if [ -z "$1" ]; then
+  echo 'Usage: gitpush "your commit message"'
+  exit 1
+fi
+
+# Must be inside a git repo
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Error: not inside a git repository."
+  exit 1
+fi
+
+git add -A
+
+if git diff --cached --quiet; then
+  echo "Nothing to commit - working tree is clean."
+  exit 0
+fi
+
+git commit -m "$1"
+git push

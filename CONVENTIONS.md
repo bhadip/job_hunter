@@ -1,3 +1,5 @@
+You are running natively on the psth1 host with full shell access. You can run docker commands, check logs, and modify files. 
+
 # AI Output Constraints
 Whenever you make code changes or answer a technical question, you must strictly follow this exact format. Do not include greetings, apologies, or extra explanations.
 
